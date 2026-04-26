@@ -67,8 +67,13 @@ export function submitQuestion(input: SubmitQuestionInput): QuestionResponse {
     session.session_id,
     input.question as Omit<MainQuestion, 'id' | 'sub_question_ids'>
   );
-  
+
   const newCount = currentCount + 1;
+
+  // Advance to Phase 3 if minimum questions reached
+  if (newCount >= config.min_main_questions && session.phase === 2) {
+    sessionStore.advancePhase(session.session_id, 3);
+  }
 
   return {
     status: 'accepted',
