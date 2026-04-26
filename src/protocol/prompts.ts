@@ -265,11 +265,11 @@ export function generatePhase5Prompt(session: AuditSession): string {
       info: session.findings.filter(f => f.severity === 'info').length,
       warning: session.findings.filter(f => f.severity === 'warning').length,
       critical: session.findings.filter(f => f.severity === 'critical').length,
-      catastrophic: session.findings.filter(f => f.severity === 'catastrophic').length,
-    },
-  };
+    catastrophic: session.findings.filter(f => f.severity === 'catastrophic').length,
+  }};
 
-  let prompt = `
+
+  const prompt = `
 ================================================================================
 PHASE 5: SYNTHESIZE REPORT
 ================================================================================
