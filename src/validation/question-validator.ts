@@ -21,7 +21,10 @@ import { QuestionRejectedError } from '../state/errors.js';
  * Check if a question is binary (yes/no answerable)
  */
 function isBinaryQuestion(text: string): boolean {
-  const binaryPatterns = [
+  const normalizedText = text.toLowerCase().trim();
+  
+  // Binary question starters
+  const binaryStarters = [
     /^\s*is\s+/i,
     /^\s*are\s+/i,
     /^\s*does\s+/i,
@@ -29,16 +32,13 @@ function isBinaryQuestion(text: string): boolean {
     /^\s*can\s+/i,
     /^\s*has\s+/i,
     /^\s*have\s+/i,
-    /\?\s*$/,
   ];
   
-  const normalizedText = text.toLowerCase().trim();
-  
-  // Check for direct yes/no questions
-  for (const pattern of binaryPatterns) {
+  // Check for direct yes/no starters
+  for (const pattern of binaryStarters) {
     if (pattern.test(normalizedText)) {
       // But allow if it contains probing words
-      const probingWords = ['how', 'why', 'what happens', 'failure', 'edge', 'case'];
+      const probingWords = ['how', 'why', 'what happens', 'failure', 'edge', 'case', 'fail'];
       const hasProbing = probingWords.some(word => normalizedText.includes(word));
       
       if (!hasProbing) {
@@ -163,13 +163,13 @@ function validateRequiredPattern(
   
   // Validate pattern-specific content
   const patternValidations: Record<QuestionPattern, (text: string) => boolean> = {
-    ASYNC_FAILURE: (t) => /when.*fail|what.*happen.*fail/i.test(t),
-    ACCIDENTAL_COUPLING: (t) => /why.*know|coupling|depend/i.test(t),
-    VALIDATION_BYPASS: (t) => /validat|bypass|defense/i.test(t),
-    IMPLICIT_MUTATION: (t) => /mutat|state|depend/i.test(t),
-    DEPENDENCY_COMPROMISE: (t) => /compromise|supply.*chain|blast.*radius/i.test(t),
-    DATA_LEAKAGE: (t) => /leak|log|cache|serial|error.*message/i.test(t),
-    INVARIANT_MISSING: (t) => /invariant|assum|enforc|guard/i.test(t),
+    ASYNC_FAILURE: (t) => /when.*fail|what.*happen|async|concurrent|timeout|abort/i.test(t),
+    ACCIDENTAL_COUPLING: (t) => /why.*know|coupling|depend|layer|violation/i.test(t),
+    VALIDATION_BYPASS: (t) => /validat|bypass|defense|sanitiz|escap/i.test(t),
+    IMPLICIT_MUTATION: (t) => /mutat|state|depend|side.*effect/i.test(t),
+    DEPENDENCY_COMPROMISE: (t) => /compromise|supply.*chain|blast.*radius|third.*party/i.test(t),
+    DATA_LEAKAGE: (t) => /leak|log|cache|serial|error.*message|expos|sensitiv/i.test(t),
+    INVARIANT_MISSING: (t) => /invariant|assum|enforc|guard|contract/i.test(t),
   };
   
   const validator = patternValidations[domainPattern];
