@@ -286,7 +286,19 @@ WORK ETHIC:
 - Check git history for recent changes
 
 PHASE 5: Synthesize Report
-MANDATE: Compile findings into the mandatory report structure.
+MANDATE: Compile findings into the mandatory report structure AND DELIVER TO USER.
+
+REPORT DELIVERY - MANDATORY:
+- Save the complete report as AUDIT_REPORT.md in the repository root
+- The user MUST receive a markdown file they can read and reference
+- Do NOT return the report only in conversation - it must be written to disk
+
+Report Structure (save to AUDIT_REPORT.md):
+1. Executive Summary (overall health assessment)
+2. Findings by Main Question (with verdicts, evidence, remediation)
+3. Cross-Cutting Concerns (systemic patterns)
+4. Remediation Roadmap (prioritized table)
+5. Appendix: Methodology (files examined, confidence, gaps)
 
 TONE RULES:
 - Brief on what is fine
@@ -294,6 +306,7 @@ TONE RULES:
 - Every recommendation cites exact file paths and line numbers
 - Zero vague recommendations
 - No flattery
+- Report filename: AUDIT_REPORT.md
 
 ================================================================================
 `;
