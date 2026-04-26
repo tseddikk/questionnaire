@@ -319,11 +319,19 @@ export function validateSubQuestions(
     const sq = subQuestions[i];
     
     // Validate target files count
-    if (sq.target_files.length === 0 || sq.target_files.length > 3) {
+    if (sq.target_files.length === 0) {
       return {
         valid: false,
         reason: 'MISSING_TARGET_FILES',
-        guidance: `Sub-question ${i + 1} must have 1-3 target files. Found: ${sq.target_files.length}`,
+        guidance: `Sub-question ${i + 1} must have at least 1 target file.`,
+        field: `sub_questions[${i}].target_files`,
+      };
+    }
+    if (sq.target_files.length > 3) {
+      return {
+        valid: false,
+        reason: 'SUB_QUESTION_COUNT_VIOLATION',
+        guidance: `Sub-question ${i + 1} has ${sq.target_files.length} target files, but maximum is 3.`,
         field: `sub_questions[${i}].target_files`,
       };
     }

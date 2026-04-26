@@ -159,7 +159,7 @@ describe('Question Validator', () => {
       ];
       const result = validateSubQuestions('mq-1', badQuestions, 'standard');
       expect(result.valid).toBe(false);
-      expect(result.reason).toBe('MISSING_TARGET_FILES');
+      expect(result.reason).toBe('SUB_QUESTION_COUNT_VIOLATION');
     });
 
     it('should require all escalations for forensic depth', () => {
