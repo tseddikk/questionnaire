@@ -1,0 +1,64 @@
+/**
+ * Join Session Tool
+ *
+ * Tool: join_session
+ * Phase: Any
+ *
+ * Called by an agent to join an existing session as an Investigator.
+ */
+
+import { collaborativeStore } from '../state/collaborative-store.js';
+import type { CollaborativeSession } from '../types/domain.js';
+
+export interface JoinSessionInput {
+  session_id: string;
+  agent_id: string;
+}
+
+export interface JoinSessionResponse {
+  status: 'joined';
+  your_role: 'investigator';
+  current_phase: number;
+  session_state: CollaborativeSession['session_state'];
+  investigators: string[];
+  synthesizer: string | null;
+  instructions: string;
+}
+
+export function joinSession(input: JoinSessionInput): JoinSessionResponse {
+  const session = collaborativeStore.joinSession(input.session_id, input.agent_id);
+
+  return {
+    status: 'joined',
+    your_role: 'investigator',
+    current_phase: session.phase,
+    session_state: session.session_state,
+    investigators: session.agents
+      .filter(a => a.role === 'investigator')
+      .map(a => a.agent_id),
+    synthesizer: session.synthesizer,
+    instructions: 'You have joined a collaborative audit session. ' +
+      'Work through Phase 1-4 independently. ' +
+      'The heat map and merged observations are available in session state.',
+  };
+}
+
+export const joinSessionTool = {
+  name: 'join_session',
+  description: 'Join an existing session as an Investigator',
+  inputSchema: {
+    type: 'object' as const,
+    properties: {
+      session_id: {
+        type: 'string' as const,
+        format: 'uuid',
+        description: 'Session ID to join',
+      },
+      agent_id: {
+        type: 'string' as const,
+        description: 'Your agent identifier',
+      },
+    },
+    required: ['session_id', 'agent_id'],
+  },
+};

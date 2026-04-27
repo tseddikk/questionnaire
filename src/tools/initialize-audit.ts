@@ -9,8 +9,9 @@
 
 import { sessionStore } from '../state/session-store.js';
 import { generateInstructions } from '../protocol/instructions.js';
+import { generateHeatMap, formatHeatMapForInstructions } from '../heat-map/heat-map-generator.js';
 import type { InitializeAuditInput } from '../types/schemas.js';
-import type { InitializeResponse } from '../types/domain.js';
+import type { InitializeResponse, HeatMap } from '../types/domain.js';
 
 // ============================================================================
 // Tool Implementation
@@ -18,21 +19,37 @@ import type { InitializeResponse } from '../types/domain.js';
 
 /**
  * Initialize a new audit session
+ * Includes Phase 0.5: Heat Map Generation
  */
-export function initializeAudit(input: InitializeAuditInput): InitializeResponse {
+export async function initializeAudit(input: InitializeAuditInput): Promise<InitializeResponse> {
   // Create the session
   const session = sessionStore.createSession(
     input.repo_path,
     input.domain,
     input.depth
   );
-  
+
+  // Phase 0.5: Generate Heat Map
+  // This runs automatically before Phase 1 unlocks
+  const heatMap = await generateHeatMap({
+    repoPath: input.repo_path,
+    domain: input.domain,
+    windowDays: 90,
+  });
+
+  // Store heat map in session
+  session.heat_map = heatMap;
+
   // Advance to phase 1
   sessionStore.advancePhase(session.session_id, 1);
-  
-  // Generate instructions based on domain and depth
-  const instructions = generateInstructions(input.domain, input.depth);
-  
+
+  // Generate base instructions
+  const baseInstructions = generateInstructions(input.domain, input.depth);
+
+  // Inject heat map into instructions
+  const heatMapSection = formatHeatMapForInstructions(heatMap);
+  const instructions = `${baseInstructions}\n\n${heatMapSection}`;
+
   return {
     session_id: session.session_id,
     status: 'ready',
@@ -83,7 +100,7 @@ export function validateInitializeInput(
 
 export const initializeAuditTool = {
   name: 'initialize_audit',
-  description: 'Initialize a new audit session. Must be called first.',
+  description: 'Initialize a new audit session with heat map generation. Must be called first.',
   inputSchema: {
     type: 'object' as const,
     properties: {
@@ -100,6 +117,19 @@ export const initializeAuditTool = {
         type: 'string' as const,
         enum: ['standard', 'deep', 'forensic'] as const,
         description: 'Audit depth level',
+      },
+      heat_map_window_days: {
+        type: 'number' as const,
+        description: 'Git history window for churn analysis (default: 90)',
+      },
+      heat_map_weights: {
+        type: 'object' as const,
+        properties: {
+          churn: { type: 'number' as const },
+          coupling: { type: 'number' as const },
+          coverage: { type: 'number' as const },
+        },
+        description: 'Override domain default weights',
       },
     },
     required: ['repo_path', 'domain', 'depth'],

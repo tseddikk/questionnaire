@@ -38,22 +38,23 @@ export class SessionStore {
     const sessionId = uuidv4();
     const now = new Date();
     
-    const session: AuditSession = {
-      session_id: sessionId,
-      repo_path: repoPath,
-      domain,
-      depth,
-      phase: 0,
-      observations: null,
-      main_questions: [],
-      sub_questions: [],
-      findings: [],
-      escalations: [],
-      checkpoints: [],
-      report: null,
-      created_at: now,
-      updated_at: now,
-    };
+  const session: AuditSession = {
+    session_id: sessionId,
+    repo_path: repoPath,
+    domain,
+    depth,
+    phase: 0,
+    observations: null,
+    main_questions: [],
+    sub_questions: [],
+    findings: [],
+    escalations: [],
+    checkpoints: [],
+    report: null,
+    heat_map: null,
+    created_at: now,
+    updated_at: now,
+  };
 
     this.sessions.set(sessionId, session);
     return session;

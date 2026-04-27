@@ -19,6 +19,7 @@ import { submitSubQuestionsTool, submitSubQuestions } from './tools/submit-sub-q
 import { submitFindingTool, submitFinding } from './tools/submit-finding.js';
 import { checkpointTool, checkpoint } from './tools/checkpoint.js';
 import { finalizeReportTool, finalizeReport } from './tools/finalize-report.js';
+import { getHeatMapTool, getHeatMap } from './tools/get-heat-map.js';
 
 import { AuditError } from './state/errors.js';
 import { ZodError } from 'zod';
@@ -33,6 +34,7 @@ import type { SubmitFindingInput, CheckpointInput, FinalizeReportInput } from '.
 // Tool definitions with type assertions to satisfy MCP SDK
 const TOOLS = [
   initializeAuditTool,
+  getHeatMapTool,
   submitObservationsTool,
   submitQuestionTool,
   submitSubQuestionsTool,
@@ -52,7 +54,9 @@ async function handleToolCall(name: string, args: unknown): Promise<unknown> {
   try {
     switch (name) {
       case 'initialize_audit':
-        return initializeAudit(args as InitializeAuditInput);
+        return await initializeAudit(args as InitializeAuditInput);
+      case 'get_heat_map':
+        return getHeatMap(args as { session_id: string; filter_bucket?: 'critical' | 'high' | 'medium' | 'low' | 'all' });
         
       case 'submit_observations':
         return submitObservations(args as SubmitObservationsInput);

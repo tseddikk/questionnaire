@@ -218,6 +218,225 @@ export interface Report {
 }
 
 // ============================================================================
+// Heat Map Types (Extension)
+// ============================================================================
+
+export interface ChurnScore {
+  file: string;
+  churn_score: number;
+  commit_count_90d: number;
+  last_modified: string;
+  last_author: string;
+}
+
+export interface CouplingScore {
+  file: string;
+  coupling_score: number;
+  inbound_count: number;
+  inbound_files: string[];
+  outbound_count: number;
+  outbound_files: string[];
+}
+
+export interface CoverageGapScore {
+  file: string;
+  coverage_gap_score: number;
+  coverage_source: 'lcov' | 'test_file' | 'directory_scan' | 'none';
+  line_coverage_pct: number | null;
+  has_test_file: boolean;
+}
+
+export type HeatBucket = 'critical' | 'high' | 'medium' | 'low';
+
+export interface HeatMapEntry {
+  file: string;
+  heat_score: number;
+  bucket: HeatBucket;
+  churn_score: number;
+  coupling_score: number;
+  coverage_gap_score: number;
+  primary_risk: 'churn' | 'coupling' | 'coverage';
+}
+
+export interface HeatMapWeights {
+  churn: number;
+  coupling: number;
+  coverage: number;
+}
+
+export interface HeatMap {
+  generated_at: string;
+  repo_stats: {
+    total_files_analyzed: number;
+    files_with_coverage_data: number;
+    git_window_days: number;
+    languages_detected: string[];
+  };
+  entries: HeatMapEntry[];
+  domain_weights_used: HeatMapWeights;
+}
+
+export interface HeatMapAlignment {
+  critical_files_with_findings: string;
+  critical_files_uninvestigated: string[];
+  low_bucket_files_investigated: number;
+  heat_map_predictive_accuracy: string;
+}
+
+// ============================================================================
+// Collaborative Multi-Agent Types (Extension)
+// ============================================================================
+
+export type AgentId = string;
+export type SessionState = 'initialized' | 'investigating' | 'pending_synthesis' | 'adjudicating' | 'finalized' | 'archived' | 'archived_incomplete';
+
+export interface Agent {
+  agent_id: AgentId;
+  joined_at: Date;
+  role: 'investigator' | 'synthesizer';
+}
+
+export interface ObservationSet {
+  agent_id: AgentId;
+  observations: ObservationLog;
+  submitted_at: Date;
+}
+
+export interface AgentQuestion {
+  question: MainQuestion;
+  agent_id: AgentId;
+}
+
+export interface QuestionReaction {
+  id: string;
+  question_id: string;
+  agent_id: AgentId;
+  reaction_type: 'challenge_quality' | 'flag_conflict' | 'endorse';
+  content: string;
+  submitted_at: Date;
+}
+
+export interface AgentFinding extends Finding {
+  agent_id: AgentId;
+  finding_id: string;
+}
+
+export interface FindingReaction {
+  id: string;
+  finding_id: string;
+  agent_id: AgentId;
+  reaction_type: 'confirm' | 'challenge' | 'extend';
+  content: string;
+  evidence: Evidence | null;
+  submitted_at: Date;
+}
+
+export interface AgentCheckpoint {
+  agent_id: AgentId;
+  main_question_id: string;
+  completed_at: Date;
+}
+
+export type InvestigationStatus = 'unexamined' | 'single_agent' | 'confirmed' | 'contested' | 'resolved';
+
+export interface InvestigationCoverage {
+  sub_question_id: string;
+  status: InvestigationStatus;
+  agents_investigated: AgentId[];
+  finding_ids: string[];
+  reactions: string[];
+}
+
+export interface AdjudicationRecord {
+  id: string;
+  finding_id: string;
+  ruling: 'uphold' | 'merge' | 'unresolved';
+  upheld_agent: AgentId | null;
+  reasoning: string;
+  merged_finding: MergedFinding | null;
+  unresolved_detail: string | null;
+  adjudicated_at: Date;
+}
+
+export interface MergedFinding {
+  text: string;
+  evidence: Evidence[];
+  verdict: Verdict;
+  severity: Severity;
+}
+
+export interface UnresolvedFinding {
+  finding_id: string;
+  description: string;
+  positions: { agent_id: AgentId; position: string; evidence: Evidence }[];
+  what_would_resolve: string;
+  where_information_likely_exists: string;
+  severity_under_each_scenario: Record<AgentId, Severity>;
+}
+
+export interface InvestigatorStats {
+  agent_id: AgentId;
+  findings_submitted: number;
+  confirmations_given: number;
+  challenges_given: number;
+  confirmation_rate: number;
+}
+
+export interface CollaborativeSession {
+  session_id: string;
+  repo_path: string;
+  domain: AuditDomain;
+  depth: AuditDepth;
+  session_state: SessionState;
+  phase: AuditPhase;
+  created_at: Date;
+  updated_at: Date;
+
+  // Agent management
+  agents: Agent[];
+  synthesizer: AgentId | null;
+
+  // Data accumulation
+  observation_sets: ObservationSet[];
+  heat_map: HeatMap | null;
+
+  // Phase 2: Question generation
+  question_pool: AgentQuestion[];
+  question_reactions: QuestionReaction[];
+  merged_questions: MainQuestion[];
+
+  // Phase 3: Sub-questions
+  sub_question_pool: SubQuestion[];
+  outlier_sub_questions: SubQuestion[]; // Sub-questions only one agent generated
+
+  // Phase 4: Investigation
+  findings: AgentFinding[];
+  finding_reactions: FindingReaction[];
+  investigation_coverage: Map<string, InvestigationCoverage>;
+  agent_checkpoints: AgentCheckpoint[];
+
+  // Phase 5: Synthesis
+  contested_findings: string[];
+  adjudications: AdjudicationRecord[];
+  unresolved_findings: UnresolvedFinding[];
+
+  // Report
+  report: Report | null;
+}
+
+export interface CollaborativeFinalizeResponse {
+  status: 'report_authorized';
+  findings_summary: FindingSummary;
+  cross_cutting_concerns: CrossCuttingConcern[];
+  escalations: EscalationFinding[];
+  adjudications: AdjudicationRecord[];
+  unresolved_findings: UnresolvedFinding[];
+  heat_map_alignment: HeatMapAlignment;
+  report_schema: ReportSchema;
+  investigator_stats: InvestigatorStats[];
+}
+
+// ============================================================================
 // Audit Session
 // ============================================================================
 
@@ -234,6 +453,7 @@ export interface AuditSession {
   escalations: EscalationFinding[];
   checkpoints: CheckpointRecord[];
   report: Report | null;
+  heat_map: HeatMap | null; // Extension: Heat Map
   created_at: Date;
   updated_at: Date;
 }
@@ -331,4 +551,14 @@ export const DEPTH_CONFIG: Record<AuditDepth, DepthConfig> = {
     min_escalation_paths: 1,
     require_all_escalations: true,
   },
+};
+
+// Default heat map weights by domain (Extension)
+export const HEAT_MAP_WEIGHTS: Record<AuditDomain, HeatMapWeights> = {
+  security: { churn: 0.35, coupling: 0.40, coverage: 0.25 },
+  performance: { churn: 0.40, coupling: 0.35, coverage: 0.25 },
+  architecture: { churn: 0.25, coupling: 0.55, coverage: 0.20 },
+  data_integrity: { churn: 0.35, coupling: 0.35, coverage: 0.30 },
+  observability: { churn: 0.30, coupling: 0.35, coverage: 0.35 },
+  compliance: { churn: 0.25, coupling: 0.40, coverage: 0.35 },
 };
