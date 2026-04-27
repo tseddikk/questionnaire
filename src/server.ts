@@ -110,7 +110,8 @@ async function handleToolCall(name: string, args: unknown): Promise<unknown> {
       case 'designate_synthesizer':
         return designateSynthesizer(args as { session_id: string; synthesizer_agent_id: string });
       case 'adjudicate_finding':
-        return adjudicateFinding(args as { session_id: string; agent_id: string; finding_id: string; ruling: 'uphold' | 'merge' | 'unresolved'; reasoning: string; upheld_agent?: string; merged_finding?: unknown; unresolved_detail?: string });
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        return adjudicateFinding(args as unknown as Parameters<typeof adjudicateFinding>[0]);
       case 'archive_session':
         return archiveSession(args as { session_id: string; reason: string });
 
