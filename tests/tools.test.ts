@@ -20,32 +20,32 @@ describe('MCP Tools', () => {
     }
   });
 
-  describe('initialize_audit', () => {
-    it('should create a new session and return instructions', () => {
+describe('initialize_audit', () => {
+    it('should create a new session and return instructions', async () => {
       const input: InitializeAuditInput = {
         repo_path: '/test/repo',
         domain: 'security',
         depth: 'standard',
       };
 
-      const result = initializeAudit(input);
-      
+      const result = await initializeAudit(input);
+
       expect(result.session_id).toBeDefined();
       expect(result.status).toBe('ready');
       expect(result.instructions).toContain('SECURITY AUDIT INSTRUCTIONS');
       expect(result.instructions).toContain('STANDARD DEPTH');
     });
 
-    it('should advance session to phase 1', () => {
+    it('should advance session to phase 1', async () => {
       const input: InitializeAuditInput = {
         repo_path: '/test/repo',
         domain: 'performance',
         depth: 'deep',
       };
 
-      const result = initializeAudit(input);
+      const result = await initializeAudit(input);
       const session = sessionStore.getSession(result.session_id);
-      
+
       expect(session.phase).toBe(1);
       expect(session.domain).toBe('performance');
       expect(session.depth).toBe('deep');
@@ -53,9 +53,9 @@ describe('MCP Tools', () => {
   });
 
   describe('submit_observations', () => {
-    it('should accept valid observations and advance to phase 2', () => {
+    it('should accept valid observations and advance to phase 2', async () => {
       // Initialize first
-      const initResult = initializeAudit({
+      const initResult = await initializeAudit({
         repo_path: '/test/repo',
         domain: 'security',
         depth: 'standard',
@@ -87,8 +87,8 @@ describe('MCP Tools', () => {
       expect(result.phase_unlocked).toBe(2);
     });
 
-    it('should reject observations without file citations', () => {
-      const initResult = initializeAudit({
+    it('should reject observations without file citations', async () => {
+      const initResult = await initializeAudit({
         repo_path: '/test/repo',
         domain: 'security',
         depth: 'standard',
@@ -114,8 +114,8 @@ describe('MCP Tools', () => {
       }).toThrow('Missing file citation');
     });
 
-    it('should throw PhaseViolationError when called in wrong phase', () => {
-      const initResult = initializeAudit({
+    it('should throw PhaseViolationError when called in wrong phase', async () => {
+      const initResult = await initializeAudit({
         repo_path: '/test/repo',
         domain: 'security',
         depth: 'standard',
@@ -150,9 +150,9 @@ describe('MCP Tools', () => {
   });
 
   describe('submit_question', () => {
-    it('should accept valid main questions', () => {
+    it('should accept valid main questions', async () => {
       // Initialize and submit observations
-      const initResult = initializeAudit({
+      const initResult = await initializeAudit({
         repo_path: '/test/repo',
         domain: 'security',
         depth: 'standard',
@@ -191,9 +191,9 @@ describe('MCP Tools', () => {
       expect(result.questions_accepted_so_far).toBe(1);
     });
 
-    it('should reject binary questions', () => {
+    it('should reject binary questions', async () => {
       // Initialize and submit observations
-      const initResult = initializeAudit({
+      const initResult = await initializeAudit({
         repo_path: '/test/repo',
         domain: 'security',
         depth: 'standard',
