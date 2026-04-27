@@ -3,10 +3,10 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { 
-  validateFinding, 
+import {
+  validateFinding,
   requiresEscalation,
-  validateEvidence 
+  validateEvidence
 } from '../src/validation/finding-validator.js';
 import type { Finding, Verdict } from '../src/types/domain.js';
 
@@ -132,7 +132,7 @@ describe('Finding Validator', () => {
       };
       const result = validateFinding(finding);
       expect(result.valid).toBe(false);
-      expect(result.reason).toBe('ESCALATION_REQUIRED');
+      expect(result.failures?.some(f => f.code === 'ESCALATION_REQUIRED')).toBe(true);
     });
 
     it('should reject SUSPICIOUS without escalation', () => {
@@ -143,7 +143,7 @@ describe('Finding Validator', () => {
       };
       const result = validateFinding(finding);
       expect(result.valid).toBe(false);
-      expect(result.reason).toBe('ESCALATION_REQUIRED');
+      expect(result.failures?.some(f => f.code === 'ESCALATION_REQUIRED')).toBe(true);
     });
 
     it('should reject PASS with non-info severity', () => {
@@ -155,6 +155,7 @@ describe('Finding Validator', () => {
       };
       const result = validateFinding(finding);
       expect(result.valid).toBe(false);
+      expect(result.failures?.some(f => f.code === 'SEVERITY_MISMATCH')).toBe(true);
     });
 
     it('should reject FAIL with info severity', () => {
@@ -164,6 +165,7 @@ describe('Finding Validator', () => {
       };
       const result = validateFinding(finding);
       expect(result.valid).toBe(false);
+      expect(result.failures?.some(f => f.code === 'SEVERITY_MISMATCH')).toBe(true);
     });
 
     it('should reject finding with empty answer', () => {
@@ -173,6 +175,7 @@ describe('Finding Validator', () => {
       };
       const result = validateFinding(finding);
       expect(result.valid).toBe(false);
+      expect(result.failures?.some(f => f.code === 'MISSING_ANSWER')).toBe(true);
     });
 
     it('should accept UNCERTAIN verdict', () => {

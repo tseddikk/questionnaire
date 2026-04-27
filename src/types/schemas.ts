@@ -220,6 +220,7 @@ export type InitializeAuditInput = z.infer<typeof InitializeAuditInputSchema>;
 export type SubmitObservationsInput = z.infer<typeof SubmitObservationsInputSchema>;
 export type SubmitQuestionInput = z.infer<typeof SubmitQuestionInputSchema>;
 export type SubmitSubQuestionsInput = z.infer<typeof SubmitSubQuestionsInputSchema>;
+export type SubQuestionInput = z.infer<typeof SubQuestionInputSchema>;
 export type SubmitFindingInput = z.infer<typeof SubmitFindingInputSchema>;
 export type CheckpointInput = z.infer<typeof CheckpointInputSchema>;
 export type FinalizeReportInput = z.infer<typeof FinalizeReportInputSchema>;

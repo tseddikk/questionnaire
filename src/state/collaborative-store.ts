@@ -106,7 +106,7 @@ export class CollaborativeSessionStore {
   getSession(sessionId: string): CollaborativeSession {
     const session = this.sessions.get(sessionId);
     if (!session) {
-      throw new SessionNotFoundError(sessionId);
+      throw new SessionNotFoundError(sessionId, 'collaborative_store');
     }
     return session;
   }

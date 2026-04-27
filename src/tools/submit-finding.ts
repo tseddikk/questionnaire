@@ -27,9 +27,10 @@ export function submitFinding(input: SubmitFindingInput): FindingResponse {
   // Validate phase
   if (session.phase !== 4) {
     throw new PhaseViolationError(
+      'submit_finding',
       session.phase,
       4,
-      'submit_finding'
+      session
     );
   }
   
@@ -118,15 +119,15 @@ export function areAllSubQuestionsAnswered(
 export function getUnansweredSubQuestions(
   sessionId: string,
   mainQuestionId: string
-): string[] {
+): { id: string; text: string }[] {
   const session = sessionStore.getSession(sessionId);
   const subQuestions = session.sub_questions.filter(
     sq => sq.main_question_id === mainQuestionId
   );
-  
+
   return subQuestions
     .filter(sq => !session.findings.some(f => f.sub_question_id === sq.id))
-    .map(sq => sq.id);
+    .map(sq => ({ id: sq.id, text: sq.text }));
 }
 
 // ============================================================================

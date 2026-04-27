@@ -20,7 +20,7 @@ describe('MCP Tools', () => {
     }
   });
 
-describe('initialize_audit', () => {
+  describe('initialize_audit', () => {
     it('should create a new session and return instructions', async () => {
       const input: InitializeAuditInput = {
         repo_path: '/test/repo',
@@ -65,11 +65,11 @@ describe('initialize_audit', () => {
         purpose: 'Test application',
         tech_stack: [{ name: 'React', version: '18.0.0', file_path: '/package.json' }],
         entry_points: [{ type: 'Component', location: 'App.tsx', file_path: '/src/App.tsx' }],
-        data_flows: [{ 
-          source: 'API', 
-          destination: 'Store', 
-          transformation: 'JSON', 
-          file_paths: ['/src/api.ts'] 
+        data_flows: [{
+          source: 'API',
+          destination: 'Store',
+          transformation: 'JSON',
+          file_paths: ['/src/api.ts']
         }],
         auth_mechanisms: [{ mechanism: 'JWT', location: 'AuthProvider', file_path: '/src/auth.tsx' }],
         error_patterns: [{ pattern: 'Console.error', handling: 'Logged', file_path: '/src/utils.ts' }],
@@ -185,7 +185,7 @@ describe('initialize_audit', () => {
       };
 
       const result = submitQuestion(input);
-      
+
       expect(result.status).toBe('accepted');
       expect(result.question_id).toBeDefined();
       expect(result.questions_accepted_so_far).toBe(1);
@@ -226,9 +226,11 @@ describe('initialize_audit', () => {
       };
 
       const result = submitQuestion(input);
-      
-      expect(result.status).toBe('rejected');
-      expect(result.reason).toBe('BINARY_QUESTION');
+
+      // New error response format returns status: 'error' with failures array
+      expect(result.status).toBe('error');
+      expect(result.code).toBe('MULTIPLE_VALIDATION_FAILURES');
+      expect(result.failures?.some(f => f.code === 'BINARY_QUESTION')).toBe(true);
     });
   });
 });

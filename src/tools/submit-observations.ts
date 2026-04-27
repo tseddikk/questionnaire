@@ -33,9 +33,10 @@ export function submitObservations(
   // Validate phase
   if (session.phase !== 1) {
     throw new PhaseViolationError(
+      'submit_observations',
       session.phase,
       1,
-      'submit_observations'
+      session
     );
   }
   

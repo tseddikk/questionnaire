@@ -120,14 +120,9 @@ async function handleToolCall(name: string, args: unknown): Promise<unknown> {
     }
   } catch (error) {
     // Handle known error types
-    if (error instanceof AuditError) {
-      return {
-        status: 'error',
-        code: error.code,
-        message: error.message,
-        details: error.details,
-      };
-    }
+      if (error instanceof AuditError) {
+        return error.toJSON();
+      }
     
     // Handle Zod validation errors
     if (error instanceof ZodError) {

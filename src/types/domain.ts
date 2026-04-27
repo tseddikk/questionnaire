@@ -496,6 +496,46 @@ export interface FindingResponse {
   guidance?: string;
 }
 
+// ============================================================================
+// Error Response Contract Types
+// ============================================================================
+
+export interface ValidationFailure {
+  code: string;
+  field: string;
+  submitted_value: unknown;
+  expected: string;
+  action: string;
+}
+
+export interface ErrorDetail {
+  field: string;
+  submitted_value: unknown;
+  expected: string;
+}
+
+export interface SessionStateContext {
+  current_phase?: number;
+  current_phase_name?: string;
+  main_questions_accepted?: number;
+  sub_question_sets_submitted?: number;
+  sub_question_sets_remaining?: number;
+  next_required_tool?: string;
+  next_required_action?: string;
+}
+
+export interface ErrorResponse {
+  status: 'error';
+  code: string;
+  phase?: number;
+  tool: string;
+  message: string;
+  detail?: ErrorDetail;
+  failures?: ValidationFailure[];
+  session_state?: SessionStateContext;
+  action: string;
+}
+
 export interface CheckpointResponse {
   status: 'checkpoint_accepted' | 'incomplete';
   main_question_index?: number;

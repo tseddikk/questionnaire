@@ -118,7 +118,7 @@ export function assertObservationsValid(
 ): asserts result is { valid: true; errors: [] } {
   if (!result.valid) {
     const firstError = result.errors[0];
-    throw new MissingFileCitationError(firstError.type, firstError.index);
+    throw new MissingFileCitationError('submit_observations', firstError.type, firstError.index);
   }
 }
 

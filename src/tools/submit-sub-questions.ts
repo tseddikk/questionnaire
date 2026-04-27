@@ -1,9 +1,9 @@
 /**
  * Submit Sub-Questions Tool
- * 
+ *
  * Tool: submit_sub_questions
  * Phase: 3
- * 
+ *
  * Accepts decomposition of a main question into sub-questions.
  */
 
@@ -11,7 +11,7 @@ import { sessionStore } from '../state/session-store.js';
 import { PhaseViolationError } from '../state/errors.js';
 import { validateSubQuestions } from '../validation/question-validator.js';
 import type { SubmitSubQuestionsInput } from '../types/schemas.js';
-import type { SubQuestionsResponse, SubQuestion } from '../types/domain.js';
+import type { SubQuestionsResponse } from '../types/domain.js';
 
 // ============================================================================
 // Tool Implementation
@@ -25,22 +25,23 @@ export function submitSubQuestions(
 ): SubQuestionsResponse {
   // Get session
   const session = sessionStore.getSession(input.session_id);
-  
+
   // Validate phase
   if (session.phase !== 3) {
     throw new PhaseViolationError(
+      'submit_sub_questions',
       session.phase,
       3,
-      'submit_sub_questions'
+      session
     );
   }
-  
+
   // Verify main question exists
   const mainQuestion = sessionStore.getMainQuestion(
     session.session_id,
     input.main_question_id
   );
-  
+
   if (!mainQuestion) {
     return {
       status: 'rejected',
@@ -48,39 +49,45 @@ export function submitSubQuestions(
       guidance: `Main question ${input.main_question_id} not found in this session.`,
     };
   }
-  
-  // Validate sub-questions
+
+  // Validate sub-questions - collects ALL failures
   const validationResult = validateSubQuestions(
     input.main_question_id,
-    input.sub_questions,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    input.sub_questions as any[],
     session.depth
   );
-  
-  if (!validationResult.valid) {
+
+  // If invalid, return multi-failure error response
+  if (!validationResult.valid && validationResult.failures) {
+    const failures = validationResult.failures;
     return {
       status: 'rejected',
-      reason: validationResult.reason!,
-      guidance: validationResult.guidance!,
+      reason: failures[0].code as import('../types/domain.js').RejectionReason,
+      guidance: failures.length > 1
+        ? `Fix all ${failures.length} failures listed.`
+        : failures[0].action,
     };
   }
-  
+
   // Store sub-questions
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   sessionStore.addSubQuestions(
     session.session_id,
     input.main_question_id,
-    input.sub_questions as Omit<SubQuestion, 'id' | 'main_question_id'>[]
+    input.sub_questions as any[]
   );
-  
+
   // Check if all main questions have sub-questions
-  const allHaveSubQuestions = session.main_questions.every(mq => 
+  const allHaveSubQuestions = session.main_questions.every(mq =>
     mq.sub_question_ids.length > 0
   );
-  
+
   // If all have sub-questions, advance to Phase 4
   if (allHaveSubQuestions) {
     sessionStore.advancePhase(session.session_id, 4);
   }
-  
+
   return {
     status: 'accepted',
     main_question_id: input.main_question_id,

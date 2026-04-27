@@ -116,9 +116,10 @@ export function checkpoint(input: CheckpointInput): CheckpointResponse {
   // Validate phase
   if (session.phase !== 4) {
     throw new PhaseViolationError(
+      'checkpoint',
       session.phase,
       4,
-      'checkpoint'
+      session
     );
   }
   
@@ -149,7 +150,7 @@ export function checkpoint(input: CheckpointInput): CheckpointResponse {
   // Check if all sub-questions have findings
   if (!areAllSubQuestionsAnswered(session.session_id, input.main_question_id)) {
     const missing = getUnansweredSubQuestions(session.session_id, input.main_question_id);
-    throw new CheckpointIncompleteError(input.main_question_id, missing);
+    throw new CheckpointIncompleteError('checkpoint', input.main_question_id, missing);
   }
   
   // Get findings for this main question

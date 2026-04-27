@@ -216,9 +216,10 @@ export function finalizeReport(input: FinalizeReportInput): FinalizeResponse {
   // Validate phase - must be phase 4 (investigation complete) or 5 (already finalizing)
   if (session.phase !== 4 && session.phase !== 5) {
     throw new PhaseViolationError(
+      'finalize_report',
       session.phase,
       4,
-      'finalize_report'
+      session
     );
   }
 

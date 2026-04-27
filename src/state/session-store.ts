@@ -66,7 +66,7 @@ export class SessionStore {
   getSession(sessionId: string): AuditSession {
     const session = this.sessions.get(sessionId);
     if (!session) {
-      throw new SessionNotFoundError(sessionId);
+      throw new SessionNotFoundError(sessionId, 'session_store');
     }
     return session;
   }

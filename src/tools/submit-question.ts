@@ -1,18 +1,22 @@
 /**
- * Submit Question Tool
- * 
+ * Submit Question Tool - Error Response Contract Implementation
+ *
  * Tool: submit_question
  * Phase: 2
- * 
+ *
  * Accepts main questions one at a time for validation.
+ * Returns structured error responses per the error response contract.
  */
 
 import { sessionStore } from '../state/session-store.js';
-import { PhaseViolationError } from '../state/errors.js';
+import {
+  PhaseViolationError,
+  QuestionLimitReachedError,
+} from '../state/errors.js';
 import { validateMainQuestion } from '../validation/question-validator.js';
 import { DEPTH_CONFIG } from '../types/domain.js';
 import type { SubmitQuestionInput } from '../types/schemas.js';
-import type { QuestionResponse, MainQuestion } from '../types/domain.js';
+import type { QuestionResponse, MainQuestion, ErrorResponse } from '../types/domain.js';
 
 // ============================================================================
 // Tool Implementation
@@ -21,47 +25,53 @@ import type { QuestionResponse, MainQuestion } from '../types/domain.js';
 /**
  * Submit a main question for validation and storage
  */
-export function submitQuestion(input: SubmitQuestionInput): QuestionResponse {
+export function submitQuestion(input: SubmitQuestionInput): QuestionResponse | ErrorResponse {
+  const toolName = 'submit_question';
+
   // Get session
   const session = sessionStore.getSession(input.session_id);
-  
+  if (!session) {
+    // This will be handled by session store, but we ensure proper error format
+    throw new Error(`Session not found: ${input.session_id}`);
+  }
+
   // Validate phase
   if (session.phase !== 2) {
     throw new PhaseViolationError(
+      toolName,
       session.phase,
       2,
-      'submit_question'
+      session
     );
   }
-  
+
   // Check if we've reached max questions
   const config = DEPTH_CONFIG[session.depth];
   const currentCount = sessionStore.getMainQuestionCount(session.session_id);
-  
+
   if (currentCount >= config.max_main_questions) {
-    return {
-      status: 'rejected',
-      reason: 'SUB_QUESTION_COUNT_VIOLATION',
-      guidance: `Maximum ${config.max_main_questions} main questions allowed for ${session.depth} depth. ` +
-        `Question intake is now closed.`,
-    };
+    throw new QuestionLimitReachedError(toolName, currentCount);
   }
-  
-  // Validate the question
+
+  // Validate the question - collects ALL failures
   const validationResult = validateMainQuestion(
     input.question as MainQuestion,
     session.domain
   );
-  
-  // If invalid, return rejection
-  if (!validationResult.valid) {
+
+  // If invalid, return multi-failure error response
+  if (!validationResult.valid && validationResult.failures) {
     return {
-      status: 'rejected',
-      reason: validationResult.reason!,
-      guidance: validationResult.guidance!,
+      status: 'error',
+      code: 'MULTIPLE_VALIDATION_FAILURES',
+      phase: 2,
+      tool: toolName,
+      message: `Question validation failed with ${validationResult.failures.length} issue(s).`,
+      failures: validationResult.failures,
+      action: 'Fix all failures listed above and resubmit. Do not resubmit until all are resolved.',
     };
   }
-  
+
   // Store the question
   const question = sessionStore.addMainQuestion(
     session.session_id,
@@ -87,6 +97,7 @@ export function submitQuestion(input: SubmitQuestionInput): QuestionResponse {
  */
 export function isPhase2Complete(sessionId: string): boolean {
   const session = sessionStore.getSession(sessionId);
+  if (!session) return false;
   const config = DEPTH_CONFIG[session.depth];
   const count = sessionStore.getMainQuestionCount(sessionId);
   return count >= config.min_main_questions;

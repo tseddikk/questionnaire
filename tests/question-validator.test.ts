@@ -30,7 +30,7 @@ describe('Question Validator', () => {
       };
       const result = validateMainQuestion(question, 'security');
       expect(result.valid).toBe(false);
-      expect(result.reason).toBe('BINARY_QUESTION');
+      expect(result.failures?.some(f => f.code === 'BINARY_QUESTION')).toBe(true);
     });
 
     it('should reject a question without target files', () => {
@@ -40,7 +40,7 @@ describe('Question Validator', () => {
       };
       const result = validateMainQuestion(question, 'security');
       expect(result.valid).toBe(false);
-      expect(result.reason).toBe('MISSING_TARGET_FILES');
+      expect(result.failures?.some(f => f.code === 'MISSING_TARGET_FILES')).toBe(true);
     });
 
     it('should reject a question with short suspicion rationale', () => {
@@ -50,32 +50,34 @@ describe('Question Validator', () => {
       };
       const result = validateMainQuestion(question, 'security');
       expect(result.valid).toBe(false);
-      expect(result.reason).toBe('MISSING_SUSPICION_RATIONALE');
+      expect(result.failures?.some(f => f.code === 'MISSING_SUSPICION_RATIONALE')).toBe(true);
     });
 
-  it('should reject a subjective question', () => {
-    const question = {
-      ...baseQuestion,
-      text: 'How would you rate the code cleanliness?',
-      edge_case_targeted: 'Edge case',
-    };
-    const result = validateMainQuestion(question, 'security');
-    expect(result.valid).toBe(false);
-    // Can be rejected as FORBIDDEN_PATTERN or BINARY_QUESTION
-    expect(['FORBIDDEN_PATTERN', 'BINARY_QUESTION']).toContain(result.reason);
-  });
+    it('should reject a subjective question', () => {
+      const question = {
+        ...baseQuestion,
+        text: 'How would you rate the code cleanliness?',
+        edge_case_targeted: 'Edge case',
+      };
+      const result = validateMainQuestion(question, 'security');
+      expect(result.valid).toBe(false);
+      // Can be rejected as FORBIDDEN_PATTERN or BINARY_QUESTION
+      const codes = result.failures?.map(f => f.code) || [];
+      expect(codes.some(c => c === 'FORBIDDEN_PATTERN' || c === 'BINARY_QUESTION')).toBe(true);
+    });
 
-  it('should reject a coverage check question', () => {
-    const question = {
-      ...baseQuestion,
-      text: 'What percentage of test coverage exists for the authentication module?',
-      edge_case_targeted: 'Edge case',
-    };
-    const result = validateMainQuestion(question, 'security');
-    expect(result.valid).toBe(false);
-    // Can be rejected as FORBIDDEN_PATTERN or BINARY_QUESTION
-    expect(['FORBIDDEN_PATTERN', 'BINARY_QUESTION']).toContain(result.reason);
-  });
+    it('should reject a coverage check question', () => {
+      const question = {
+        ...baseQuestion,
+        text: 'What percentage of test coverage exists for the authentication module?',
+        edge_case_targeted: 'Edge case',
+      };
+      const result = validateMainQuestion(question, 'security');
+      expect(result.valid).toBe(false);
+      // Can be rejected as FORBIDDEN_PATTERN or BINARY_QUESTION
+      const codes = result.failures?.map(f => f.code) || [];
+      expect(codes.some(c => c === 'FORBIDDEN_PATTERN' || c === 'BINARY_QUESTION')).toBe(true);
+    });
 
     it('should reject happy-path-only question', () => {
       const question = {
@@ -85,7 +87,7 @@ describe('Question Validator', () => {
       };
       const result = validateMainQuestion(question, 'security');
       expect(result.valid).toBe(false);
-      expect(result.reason).toBe('HAPPY_PATH_ONLY');
+      expect(result.failures?.some(f => f.code === 'HAPPY_PATH_ONLY')).toBe(true);
     });
 
     it('should validate domain pattern match', () => {
@@ -137,14 +139,14 @@ describe('Question Validator', () => {
     it('should reject too few sub-questions for standard depth', () => {
       const result = validateSubQuestions('mq-1', validSubQuestions.slice(0, 2), 'standard');
       expect(result.valid).toBe(false);
-      expect(result.reason).toBe('SUB_QUESTION_COUNT_VIOLATION');
+      expect(result.failures?.some(f => f.code === 'SUB_QUESTION_COUNT_VIOLATION')).toBe(true);
     });
 
     it('should reject too many sub-questions for standard depth', () => {
       const manyQuestions = [...validSubQuestions, ...validSubQuestions];
       const result = validateSubQuestions('mq-1', manyQuestions, 'standard');
       expect(result.valid).toBe(false);
-      expect(result.reason).toBe('SUB_QUESTION_COUNT_VIOLATION');
+      expect(result.failures?.some(f => f.code === 'SUB_QUESTION_COUNT_VIOLATION')).toBe(true);
     });
 
     it('should reject sub-questions with too many target files', () => {
@@ -159,7 +161,7 @@ describe('Question Validator', () => {
       ];
       const result = validateSubQuestions('mq-1', badQuestions, 'standard');
       expect(result.valid).toBe(false);
-      expect(result.reason).toBe('SUB_QUESTION_COUNT_VIOLATION');
+      expect(result.failures?.some(f => f.code === 'TOO_MANY_TARGET_FILES')).toBe(true);
     });
 
     it('should require all escalations for forensic depth', () => {
@@ -169,7 +171,7 @@ describe('Question Validator', () => {
       }];
       const result = validateSubQuestions('mq-1', missingEscalation, 'forensic');
       expect(result.valid).toBe(false);
-      expect(result.reason).toBe('SUB_QUESTION_COUNT_VIOLATION');
+      expect(result.failures?.some(f => f.code === 'SUB_QUESTION_COUNT_VIOLATION')).toBe(true);
     });
   });
 });
