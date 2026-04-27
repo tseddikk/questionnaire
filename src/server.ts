@@ -21,6 +21,15 @@ import { checkpointTool, checkpoint } from './tools/checkpoint.js';
 import { finalizeReportTool, finalizeReport } from './tools/finalize-report.js';
 import { getHeatMapTool, getHeatMap } from './tools/get-heat-map.js';
 
+// Collaborative tools
+import { discoverSessionsTool, discoverSessions } from './tools/discover-sessions.js';
+import { joinSessionTool, joinSession } from './tools/join-session.js';
+import { reactToFindingTool, reactToFinding } from './tools/react-to-finding.js';
+import { reactToQuestionTool, reactToQuestion } from './tools/react-to-question.js';
+import { getSessionSummaryTool, getSessionSummary } from './tools/get-session-summary.js';
+import { designateSynthesizerTool, designateSynthesizer } from './tools/designate-synthesizer.js';
+import { adjudicateFindingTool, adjudicateFinding } from './tools/adjudicate-finding.js';
+
 import { AuditError } from './state/errors.js';
 import { ZodError } from 'zod';
 import type { InitializeAuditInput, SubmitObservationsInput } from './types/schemas.js';
@@ -33,6 +42,7 @@ import type { SubmitFindingInput, CheckpointInput, FinalizeReportInput } from '.
 
 // Tool definitions with type assertions to satisfy MCP SDK
 const TOOLS = [
+  // Core tools
   initializeAuditTool,
   getHeatMapTool,
   submitObservationsTool,
@@ -41,6 +51,14 @@ const TOOLS = [
   submitFindingTool,
   checkpointTool,
   finalizeReportTool,
+  // Collaborative tools
+  discoverSessionsTool,
+  joinSessionTool,
+  reactToFindingTool,
+  reactToQuestionTool,
+  getSessionSummaryTool,
+  designateSynthesizerTool,
+  adjudicateFindingTool,
 ] as unknown as Tool[];
 
 // ============================================================================
@@ -75,7 +93,23 @@ async function handleToolCall(name: string, args: unknown): Promise<unknown> {
         
       case 'finalize_report':
         return finalizeReport(args as FinalizeReportInput);
-        
+
+      // Collaborative tools
+      case 'discover_sessions':
+        return discoverSessions(args as { repo_path: string });
+      case 'join_session':
+        return joinSession(args as { session_id: string; agent_id: string });
+      case 'react_to_finding':
+        return reactToFinding(args as { session_id: string; agent_id: string; finding_id: string; reaction_type: 'confirm' | 'challenge' | 'extend'; content: string; evidence: unknown });
+      case 'react_to_question':
+        return reactToQuestion(args as { session_id: string; agent_id: string; question_id: string; reaction_type: 'challenge_quality' | 'flag_conflict' | 'endorse'; content: string });
+      case 'get_session_summary':
+        return getSessionSummary(args as { session_id: string });
+      case 'designate_synthesizer':
+        return designateSynthesizer(args as { session_id: string; synthesizer_agent_id: string });
+      case 'adjudicate_finding':
+        return adjudicateFinding(args as { session_id: string; finding_id: string; ruling: 'uphold' | 'merge' | 'unresolved'; reasoning: string; upheld_agent?: string; merged_finding?: unknown; unresolved_detail?: string });
+
       default:
         throw new Error(`Unknown tool: ${name}`);
     }
