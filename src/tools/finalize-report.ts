@@ -127,16 +127,92 @@ function generateCrossCuttingConcerns(
 }
 
 // ============================================================================
+// Collaborative Preconditions (Extension)
+// ============================================================================
+
+import { collaborativeStore } from '../state/collaborative-store.js';
+
+interface PreconditionFailure {
+  condition: string;
+  detail: string;
+  action: string;
+}
+
+/**
+ * Check collaborative preconditions before finalization
+ * Returns array of failed preconditions or empty array if all pass
+ */
+function checkCollaborativePreconditions(sessionId: string): PreconditionFailure[] {
+  const session = collaborativeStore.getSession(sessionId);
+  const failures: PreconditionFailure[] = [];
+
+  // Precondition 1: Synthesizer must be designated
+  if (!session.synthesizer) {
+    failures.push({
+      condition: 'NO_SYNTHESIZER_DESIGNATED',
+      detail: 'No agent has been designated as Synthesizer.',
+      action: 'Call designate_synthesizer to assign a Synthesizer.',
+    });
+  }
+
+  // Precondition 2: All investigators must have checkpointed all questions
+  const investigatorAgents = session.agents.filter(a => a.role === 'investigator');
+  for (const agent of investigatorAgents) {
+    const agentCheckpoints = session.agent_checkpoints.filter(
+      cp => cp.agent_id === agent.agent_id
+    );
+    const checkpointedCount = new Set(agentCheckpoints.map(cp => cp.main_question_id)).size;
+    const totalQuestions = session.merged_questions.length;
+
+    if (checkpointedCount < totalQuestions) {
+      failures.push({
+        condition: 'UNINVESTIGATED_CHECKPOINTS',
+        detail: `${agent.agent_id} has not checkpointed ${totalQuestions - checkpointedCount} main question(s).`,
+        action: `${agent.agent_id} must submit findings for remaining sub-questions and call checkpoint.`,
+      });
+    }
+  }
+
+  // Precondition 3: All contested findings must be adjudicated
+  if (session.contested_findings.length > 0) {
+    for (const findingId of session.contested_findings) {
+      const finding = session.findings.find(f => f.finding_id === findingId);
+      failures.push({
+        condition: 'UNRESOLVED_CONTESTED_FINDINGS',
+        detail: `Finding ${findingId} (${finding?.answer?.substring(0, 50) || 'Unknown'}...) is contested and has not been adjudicated.`,
+        action: `Call adjudicate_finding for ${findingId} before finalizing.`,
+      });
+    }
+  }
+
+  // Precondition 4: At least one FAIL or SUSPICIOUS finding exists
+  const hasCriticalFindings = session.findings.some(
+    f => f.verdict === 'FAIL' || f.verdict === 'SUSPICIOUS'
+  );
+  if (!hasCriticalFindings) {
+    failures.push({
+      condition: 'NO_CRITICAL_FINDINGS',
+      detail: 'No FAIL or SUSPICIOUS findings exist in the session.',
+      action: 'Continue investigation until critical findings are identified.',
+    });
+  }
+
+  return failures;
+}
+
+// ============================================================================
 // Tool Implementation
 // ============================================================================
 
 /**
  * Finalize the audit and generate report data
+ * Extended with collaborative preconditions
  */
 export function finalizeReport(input: FinalizeReportInput): FinalizeResponse {
-  // Get session
+  // Get session from both stores (base and collaborative share the same session concept)
   const session = sessionStore.getSession(input.session_id);
-  
+  const collabSession = collaborativeStore.getSession(input.session_id);
+
   // Validate phase - must be phase 4 (investigation complete) or 5 (already finalizing)
   if (session.phase !== 4 && session.phase !== 5) {
     throw new PhaseViolationError(
@@ -145,7 +221,18 @@ export function finalizeReport(input: FinalizeReportInput): FinalizeResponse {
       'finalize_report'
     );
   }
-  
+
+  // Check collaborative preconditions
+  const preconditionFailures = checkCollaborativePreconditions(input.session_id);
+  if (preconditionFailures.length > 0) {
+    return {
+      status: 'rejected',
+      reason: 'PRECONDITIONS_NOT_MET',
+      failed_preconditions: preconditionFailures,
+      guidance: 'All preconditions must be satisfied before finalizing.',
+    } as unknown as FinalizeResponse;
+  }
+
   // Check if all main questions are checkpointed
   const remaining = sessionStore.getRemainingMainQuestions(session.session_id);
   if (remaining.length > 0) {
@@ -166,21 +253,42 @@ export function finalizeReport(input: FinalizeReportInput): FinalizeResponse {
       },
     };
   }
-  
+
   // Ensure phase is 5
   if (session.phase === 4) {
     session.phase = 5;
   }
-  
+
   // Generate report data
   const findingsSummary = generateFindingSummary(session.findings);
   const crossCuttingConcerns = generateCrossCuttingConcerns(session.checkpoints);
-  
+
+  // Calculate heat map alignment if heat map exists
+  let heatMapAlignment = null;
+  if (session.heat_map) {
+    const criticalFiles = session.heat_map.entries.filter(e => e.bucket === 'critical');
+    const criticalWithFindings = criticalFiles.filter(cf =>
+      session.findings.some(f => f.evidence?.file_path?.includes(cf.file))
+    );
+
+    heatMapAlignment = {
+      critical_files_with_findings: `${criticalWithFindings.length}/${criticalFiles.length}`,
+      critical_files_uninvestigated: criticalFiles
+        .filter(cf => !session.findings.some(f => f.evidence?.file_path?.includes(cf.file)))
+        .map(e => e.file),
+      low_bucket_files_investigated: 0, // Would need to track
+      heat_map_predictive_accuracy: 'high', // Placeholder
+    };
+  }
+
   return {
     status: 'report_authorized',
     findings_summary: findingsSummary,
     cross_cutting_concerns: crossCuttingConcerns,
     escalations: session.escalations,
+    heat_map_alignment: heatMapAlignment,
+    adjudications: collabSession.adjudications,
+    unresolved_findings: collabSession.unresolved_findings,
     report_schema: {
       version: '1.0',
       required_sections: [
@@ -189,6 +297,9 @@ export function finalizeReport(input: FinalizeReportInput): FinalizeResponse {
         'cross_cutting_concerns',
         'remediation_roadmap',
         'appendix_methodology',
+        'collaborative_metadata',
+        'investigator_performance',
+        'unresolved_findings',
       ],
     },
   };

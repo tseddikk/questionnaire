@@ -9,17 +9,12 @@
 import { v4 as uuidv4 } from 'uuid';
 import type {
   CollaborativeSession,
-  Agent,
   AgentId,
   AgentFinding,
   FindingReaction,
-  QuestionReaction,
-  AgentCheckpoint,
   AdjudicationRecord,
   AuditDomain,
   AuditDepth,
-  HeatMap,
-  InvestigationCoverage,
 } from '../types/domain.js';
 import { SessionNotFoundError } from './errors.js';
 
@@ -281,7 +276,7 @@ export class CollaborativeSessionStore {
   /**
    * Archive session
    */
-  archiveSession(sessionId: string, reason: string): CollaborativeSession {
+  archiveSession(sessionId: string, _reason: string): CollaborativeSession {
     const session = this.getSession(sessionId);
     session.session_state = session.report ? 'archived' : 'archived_incomplete';
     session.updated_at = new Date();

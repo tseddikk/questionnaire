@@ -506,10 +506,15 @@ export interface CheckpointResponse {
 }
 
 export interface FinalizeResponse {
-  status: 'report_authorized';
+  status: 'report_authorized' | 'rejected';
+  reason?: string;
+  failed_preconditions?: { condition: string; detail: string; action: string }[];
   findings_summary: FindingSummary;
   cross_cutting_concerns: CrossCuttingConcern[];
   escalations: EscalationFinding[];
+  adjudications?: AdjudicationRecord[];
+  unresolved_findings?: UnresolvedFinding[];
+  heat_map_alignment?: HeatMapAlignment | null;
   report_schema: ReportSchema;
 }
 

@@ -13,6 +13,7 @@ import type { AdjudicationRecord, MergedFinding } from '../types/domain.js';
 
 export interface AdjudicateFindingInput {
   session_id: string;
+  agent_id: string;
   finding_id: string;
   ruling: 'uphold' | 'merge' | 'unresolved';
   upheld_agent?: string;

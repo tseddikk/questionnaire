@@ -29,6 +29,7 @@ import { reactToQuestionTool, reactToQuestion } from './tools/react-to-question.
 import { getSessionSummaryTool, getSessionSummary } from './tools/get-session-summary.js';
 import { designateSynthesizerTool, designateSynthesizer } from './tools/designate-synthesizer.js';
 import { adjudicateFindingTool, adjudicateFinding } from './tools/adjudicate-finding.js';
+import { archiveSessionTool, archiveSession } from './tools/archive-session.js';
 
 import { AuditError } from './state/errors.js';
 import { ZodError } from 'zod';
@@ -59,6 +60,7 @@ const TOOLS = [
   getSessionSummaryTool,
   designateSynthesizerTool,
   adjudicateFindingTool,
+  archiveSessionTool,
 ] as unknown as Tool[];
 
 // ============================================================================
@@ -100,7 +102,7 @@ async function handleToolCall(name: string, args: unknown): Promise<unknown> {
       case 'join_session':
         return joinSession(args as { session_id: string; agent_id: string });
       case 'react_to_finding':
-        return reactToFinding(args as { session_id: string; agent_id: string; finding_id: string; reaction_type: 'confirm' | 'challenge' | 'extend'; content: string; evidence: unknown });
+        return reactToFinding(args as { session_id: string; agent_id: string; finding_id: string; reaction_type: 'confirm' | 'challenge' | 'extend'; content: string; evidence?: { file_path: string; line_start: number; line_end: number; snippet: string } | null });
       case 'react_to_question':
         return reactToQuestion(args as { session_id: string; agent_id: string; question_id: string; reaction_type: 'challenge_quality' | 'flag_conflict' | 'endorse'; content: string });
       case 'get_session_summary':
@@ -108,7 +110,9 @@ async function handleToolCall(name: string, args: unknown): Promise<unknown> {
       case 'designate_synthesizer':
         return designateSynthesizer(args as { session_id: string; synthesizer_agent_id: string });
       case 'adjudicate_finding':
-        return adjudicateFinding(args as { session_id: string; finding_id: string; ruling: 'uphold' | 'merge' | 'unresolved'; reasoning: string; upheld_agent?: string; merged_finding?: unknown; unresolved_detail?: string });
+        return adjudicateFinding(args as { session_id: string; agent_id: string; finding_id: string; ruling: 'uphold' | 'merge' | 'unresolved'; reasoning: string; upheld_agent?: string; merged_finding?: unknown; unresolved_detail?: string });
+      case 'archive_session':
+        return archiveSession(args as { session_id: string; reason: string });
 
       default:
         throw new Error(`Unknown tool: ${name}`);

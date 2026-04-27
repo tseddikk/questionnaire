@@ -11,7 +11,7 @@ import { sessionStore } from '../state/session-store.js';
 import { generateInstructions } from '../protocol/instructions.js';
 import { generateHeatMap, formatHeatMapForInstructions } from '../heat-map/heat-map-generator.js';
 import type { InitializeAuditInput } from '../types/schemas.js';
-import type { InitializeResponse, HeatMap } from '../types/domain.js';
+import type { InitializeResponse } from '../types/domain.js';
 
 // ============================================================================
 // Tool Implementation

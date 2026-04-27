@@ -21,7 +21,7 @@ export interface DesignateSynthesizerResponse {
 }
 
 export function designateSynthesizer(input: DesignateSynthesizerInput): DesignateSynthesizerResponse {
-  const session = collaborativeStore.designateSynthesizer(
+  collaborativeStore.designateSynthesizer(
     input.session_id,
     input.synthesizer_agent_id
   );

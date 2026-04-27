@@ -180,7 +180,9 @@ export async function generateHeatMap(
 export function formatHeatMapForInstructions(heatMap: HeatMap): string {
   const critical = heatMap.entries.filter(e => e.bucket === 'critical');
   const high = heatMap.entries.filter(e => e.bucket === 'high');
-  const medium = heatMap.entries.filter(e => e.bucket === 'medium');
+  // Medium entries tracked but not displayed in summary
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _medium = heatMap.entries.filter(e => e.bucket === 'medium');
 
   let output = `
 HEAT MAP — READ BEFORE PHASE 1
