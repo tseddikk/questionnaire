@@ -318,7 +318,10 @@ function buildSessionStateContext(
     const mainQuestions = (sessionState as any).main_questions || (sessionState as any).merged_questions || [];
     const subQuestions = (sessionState as any).sub_questions || (sessionState as any).sub_question_pool || [];
 
+    console.error(`[DEBUG] buildSessionStateContext: mainQuestions.length=${mainQuestions.length}, subQuestions.length=${subQuestions.length}`);
+
     context.main_questions_accepted = mainQuestions.length;
+
     context.sub_question_sets_submitted = subQuestions.length;
     context.sub_question_sets_remaining = (context.main_questions_accepted ?? 0) - (context.sub_question_sets_submitted ?? 0);
   }

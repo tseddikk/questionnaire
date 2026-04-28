@@ -130,13 +130,16 @@ export class CollaborativeSessionStore {
           try {
             const data = readFileSync(sessionPath, 'utf-8');
             const session = JSON.parse(data) as CollaborativeSession;
+
+            // Don't overwrite if already in memory
+            if (this.sessions.has(sessionId)) {
+              continue;
+            }
+
             // Revive Date objects from JSON
             session.created_at = new Date(session.created_at);
             session.updated_at = new Date(session.updated_at);
-            // Set active session if this one is not archived
-            if (session.session_state !== 'archived' && session.session_state !== 'archived_incomplete') {
-              this.activeSessionId = sessionId;
-            }
+            
             // Track the repo path for this session
             this.repoPaths.set(sessionId, repoPath);
             this.sessions.set(sessionId, session);
@@ -152,7 +155,7 @@ export class CollaborativeSessionStore {
   }
 
   /**
-   * Save session to disk
+   * Save session to disk and update cache
    */
   private saveSession(session: CollaborativeSession): void {
     const repoPath = this.repoPaths.get(session.session_id);
@@ -160,6 +163,9 @@ export class CollaborativeSessionStore {
       console.error(`No repo path known for collaborative session ${session.session_id}`);
       return;
     }
+
+    // Update memory cache
+    this.sessions.set(session.session_id, session);
 
     const sessionPath = this.getSessionPath(session.session_id, repoPath);
     try {
@@ -297,14 +303,13 @@ export class CollaborativeSessionStore {
 
   /**
    * Get a session by ID
+   * @param sessionId Session ID
+   * @param forceReload Whether to force a reload from disk
    */
-  getSession(sessionId: string): CollaborativeSession {
-    // Check cache first
-    let session = this.sessions.get(sessionId);
+  getSession(sessionId: string, forceReload: boolean = false): CollaborativeSession {
+    // Consult the global registry to find the repo path if not in memory
     let repoPath = this.repoPaths.get(sessionId);
-
-    // If not in memory, consult the global registry to find the repo path
-    if (!session && !repoPath) {
+    if (!repoPath) {
       const registry = loadGlobalRegistry();
       repoPath = registry[sessionId];
       if (repoPath) {
@@ -312,12 +317,14 @@ export class CollaborativeSessionStore {
       }
     }
 
-    // If not in cache, try to load from known repo path
-    if (!session && repoPath) {
-      this.loadSessionsFromRepo(repoPath);
-      session = this.sessions.get(sessionId);
+    // If forceReload or not in cache, try to load from known repo path
+    if (forceReload || !this.sessions.has(sessionId)) {
+      if (repoPath) {
+        this.loadSessionsFromRepo(repoPath);
+      }
     }
 
+    const session = this.sessions.get(sessionId);
     if (!session) {
       throw new SessionNotFoundError(sessionId, 'collaborative_store');
     }
@@ -361,10 +368,16 @@ export class CollaborativeSessionStore {
    * Get active session ID
    */
   getActiveSessionId(): string | null {
+    // Active session tracking is in-memory only for current repo
+
     // Check if active session is expired
     if (this.activeSessionId) {
-      const active = this.sessions.get(this.activeSessionId);
-      if (!active || this.isSessionExpired(active)) {
+      try {
+        const active = this.getSession(this.activeSessionId);
+        if (this.isSessionExpired(active)) {
+          this.activeSessionId = null;
+        }
+      } catch {
         this.activeSessionId = null;
       }
     }
@@ -674,7 +687,7 @@ export class CollaborativeSessionStore {
    * Set observations for a session (Standard/Single-agent mode)
    */
   setObservations(sessionId: string, agentId: string, observations: any): void {
-    const session = this.getSession(sessionId);
+    const session = this.getSession(sessionId, true);
 
     if (session.phase !== 1) {
       throw new Error(`Cannot set observations in phase ${session.phase}`);
@@ -699,7 +712,7 @@ export class CollaborativeSessionStore {
     agentId: string,
     question: any
   ): any {
-    const session = this.getSession(sessionId);
+    const session = this.getSession(sessionId, true);
 
     if (session.phase !== 2) {
       throw new Error(`Cannot add main questions in phase ${session.phase}`);
@@ -712,6 +725,7 @@ export class CollaborativeSessionStore {
     };
 
     session.merged_questions.push(fullQuestion);
+    console.error(`[DEBUG] addMainQuestion: sessionId=${sessionId}, merged_questions.length=${session.merged_questions.length}`);
     session.question_pool.push({
       question: fullQuestion,
       agent_id: agentId,
@@ -726,14 +740,14 @@ export class CollaborativeSessionStore {
    * Get main question count
    */
   getMainQuestionCount(sessionId: string): number {
-    return this.getSession(sessionId).merged_questions.length;
+    return this.getSession(sessionId, true).merged_questions.length;
   }
 
   /**
    * Get a main question by ID
    */
   getMainQuestion(sessionId: string, questionId: string): any | undefined {
-    const session = this.getSession(sessionId);
+    const session = this.getSession(sessionId, true);
     return session.merged_questions.find(q => q.id === questionId);
   }
 
@@ -741,7 +755,7 @@ export class CollaborativeSessionStore {
    * Get remaining main questions (without sub-questions)
    */
   getRemainingMainQuestions(sessionId: string): any[] {
-    const session = this.getSession(sessionId);
+    const session = this.getSession(sessionId, true);
     return session.merged_questions.filter(q => q.sub_question_ids.length === 0);
   }
 
@@ -753,7 +767,7 @@ export class CollaborativeSessionStore {
     mainQuestionId: string,
     subQuestions: any[]
   ): any[] {
-    const session = this.getSession(sessionId);
+    const session = this.getSession(sessionId, true);
 
     if (session.phase !== 3) {
       throw new Error(`Cannot add sub-questions in phase ${session.phase}`);
@@ -781,7 +795,7 @@ export class CollaborativeSessionStore {
    * Get a sub-question by ID
    */
   getSubQuestion(sessionId: string, subQuestionId: string): any | undefined {
-    const session = this.getSession(sessionId);
+    const session = this.getSession(sessionId, true);
     return session.sub_question_pool.find(sq => sq.id === subQuestionId);
   }
 
@@ -789,7 +803,7 @@ export class CollaborativeSessionStore {
    * Add a finding (Standard/Single-agent mode)
    */
   addFinding(sessionId: string, agentId: string, finding: any): any {
-    const session = this.getSession(sessionId);
+    const session = this.getSession(sessionId, true);
 
     if (session.phase !== 4 && session.phase !== 5) {
       throw new Error(`Cannot add findings in phase ${session.phase}`);
@@ -811,7 +825,7 @@ export class CollaborativeSessionStore {
    * Check if finding exists for sub-question
    */
   hasFindingForSubQuestion(sessionId: string, subQuestionId: string): boolean {
-    const session = this.getSession(sessionId);
+    const session = this.getSession(sessionId, true);
     return session.findings.some(f => f.sub_question_id === subQuestionId);
   }
 
@@ -819,7 +833,7 @@ export class CollaborativeSessionStore {
    * Get findings for a main question
    */
   getFindingsForMainQuestion(sessionId: string, mainQuestionId: string): any[] {
-    const session = this.getSession(sessionId);
+    const session = this.getSession(sessionId, true);
     const mainQuestion = session.merged_questions.find(q => q.id === mainQuestionId);
 
     if (!mainQuestion) {
@@ -880,7 +894,7 @@ export class CollaborativeSessionStore {
    * Set final report
    */
   setReport(sessionId: string, report: any): void {
-    const session = this.getSession(sessionId);
+    const session = this.getSession(sessionId, true);
     session.report = report;
     session.session_state = 'finalized';
     session.updated_at = new Date();

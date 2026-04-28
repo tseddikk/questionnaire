@@ -45,7 +45,7 @@ export function submitSubQuestions(
   if (!mainQuestion) {
     return {
       status: 'rejected',
-      reason: 'MISSING_TARGET_FILES',
+      reason: 'UNKNOWN_MAIN_QUESTION',
       guidance: `Main question ${input.main_question_id} not found in this session.`,
     };
   }
@@ -72,7 +72,7 @@ export function submitSubQuestions(
 
   // Store sub-questions
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  collaborativeStore.addSubQuestions(
+  const createdSubQuestions = collaborativeStore.addSubQuestions(
     session.session_id,
     input.main_question_id,
     input.sub_questions as any[]
@@ -91,6 +91,7 @@ export function submitSubQuestions(
   return {
     status: 'accepted',
     main_question_id: input.main_question_id,
+    sub_question_ids: createdSubQuestions.map(sq => sq.id),
   };
 }
 

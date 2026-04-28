@@ -48,8 +48,11 @@ export function submitObservations(
   const agentId = 'agent-0'; 
   collaborativeStore.setObservations(session.session_id, agentId, input.observations);
   
+  // Get latest state after advance
+  const updatedSession = collaborativeStore.getSession(session.session_id, true);
+
   // Generate Phase 2 prompt
-  const prompt = generatePhase2Prompt(session as any);
+  const prompt = generatePhase2Prompt(updatedSession as any);
   
   return {
     status: 'accepted',

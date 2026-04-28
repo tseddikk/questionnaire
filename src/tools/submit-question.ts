@@ -80,11 +80,13 @@ export function submitQuestion(input: SubmitQuestionInput): QuestionResponse | E
     input.question as Omit<MainQuestion, 'id' | 'sub_question_ids'>
   );
 
-  const newCount = currentCount + 1;
+  // Get latest state
+  const updatedSession = collaborativeStore.getSession(session.session_id, true);
+  const newCount = updatedSession.merged_questions.length;
 
   // Advance to Phase 3 if minimum questions reached
-  if (newCount >= config.min_main_questions && session.phase === 2) {
-    collaborativeStore.advancePhase(session.session_id, 3);
+  if (newCount >= config.min_main_questions && updatedSession.phase === 2) {
+    collaborativeStore.advancePhase(updatedSession.session_id, 3);
   }
 
   return {

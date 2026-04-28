@@ -37,7 +37,8 @@ export type RejectionReason =
   | 'MISSING_FILE_CITATION'
   | 'ESCALATION_REQUIRED'
   | 'CHECKPOINT_INCOMPLETE'
-  | 'SUB_QUESTION_COUNT_VIOLATION';
+  | 'SUB_QUESTION_COUNT_VIOLATION'
+  | 'UNKNOWN_MAIN_QUESTION';
 
 export type QuestionPattern =
   | 'ASYNC_FAILURE'
@@ -485,6 +486,7 @@ export interface QuestionResponse {
 export interface SubQuestionsResponse {
   status: 'accepted' | 'rejected';
   main_question_id?: string;
+  sub_question_ids?: string[];
   reason?: RejectionReason;
   guidance?: string;
 }

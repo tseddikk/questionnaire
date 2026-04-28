@@ -11,6 +11,7 @@ import { collaborativeStore } from '../src/state/collaborative-store.js';
 import { initializeAudit } from '../src/tools/initialize-audit.js';
 import { submitObservations } from '../src/tools/submit-observations.js';
 import { submitQuestion } from '../src/tools/submit-question.js';
+import { submitSubQuestions } from '../src/tools/submit-sub-questions.js';
 import { PhaseViolationError } from '../src/state/errors.js';
 import type { InitializeAuditInput, SubmitObservationsInput } from '../src/types/schemas.js';
 import type { SubmitQuestionInput } from '../src/types/schemas.js';
@@ -247,6 +248,122 @@ describe('MCP Tools', () => {
       expect(result.status).toBe('error');
       expect(result.code).toBe('MULTIPLE_VALIDATION_FAILURES');
       expect(result.failures?.some(f => f.code === 'BINARY_QUESTION')).toBe(true);
+    });
+  });
+
+  describe('submit_sub_questions', () => {
+    async function setupPhase3(domain: any = 'security', depth: any = 'standard') {
+      const initResult = await initializeAudit({
+        repo_path: repoPath,
+        domain,
+        depth,
+      });
+
+      submitObservations({
+        session_id: initResult.session_id,
+        observations: {
+          purpose: 'Test',
+          tech_stack: [{ name: 'React', version: '18.0.0', file_path: '/package.json' }],
+          entry_points: [], data_flows: [], auth_mechanisms: [], error_patterns: [], test_coverage: [], config_secrets: [], deployment: [],
+        },
+      });
+
+      const questionIds: string[] = [];
+      for (let i = 1; i <= 5; i++) {
+        const qResult = submitQuestion({
+          session_id: initResult.session_id,
+          question: {
+            text: `Question ${i}: Where is user input validated, and what happens if validation is bypassed?`,
+            target_files: [`/src/file${i}.ts`],
+            suspicion_rationale: `Rationale ${i}`,
+            edge_case_targeted: `Edge case ${i}`,
+            domain_pattern: 'VALIDATION_BYPASS',
+          },
+        }) as any;
+        questionIds.push(qResult.question_id);
+      }
+
+      return { sessionId: initResult.session_id, questionIds };
+    }
+
+    it('should return sub_question_ids when accepted', async () => {
+      const { sessionId, questionIds } = await setupPhase3();
+      const qId = questionIds[0];
+
+      // Call submit_sub_questions
+      const subResult = submitSubQuestions({
+        session_id: sessionId,
+        main_question_id: qId,
+        sub_questions: [
+          {
+            text: 'Sub-question 1',
+            target_files: ['/src/session.ts'],
+            pass_criteria: 'Pass',
+            fail_criteria: 'Fail',
+            evidence_pattern: 'Pattern',
+            escalation_question: 'Escalation?',
+          },
+          {
+            text: 'Sub-question 2',
+            target_files: ['/src/session.ts'],
+            pass_criteria: 'Pass',
+            fail_criteria: 'Fail',
+            evidence_pattern: 'Pattern',
+            escalation_question: 'Escalation?',
+          },
+          {
+            text: 'Sub-question 3',
+            target_files: ['/src/session.ts'],
+            pass_criteria: 'Pass',
+            fail_criteria: 'Fail',
+            evidence_pattern: 'Pattern',
+            escalation_question: 'Escalation?',
+          }
+        ],
+      });
+
+      expect(subResult.status).toBe('accepted');
+      expect(subResult.main_question_id).toBe(qId);
+      expect(subResult.sub_question_ids).toBeDefined();
+      expect(subResult.sub_question_ids?.length).toBe(3);
+    });
+
+    it('should return UNKNOWN_MAIN_QUESTION for invalid question IDs', async () => {
+      const { sessionId } = await setupPhase3();
+
+      const subResult = submitSubQuestions({
+        session_id: sessionId,
+        main_question_id: '4244529c-b907-48b6-a541-0411baa27aad', // Some random ID
+        sub_questions: [
+          {
+            text: 'Sub-question 1',
+            target_files: ['/src/session.ts'],
+            pass_criteria: 'Pass',
+            fail_criteria: 'Fail',
+            evidence_pattern: 'Pattern',
+            escalation_question: 'Escalation?',
+          },
+          {
+            text: 'Sub-question 2',
+            target_files: ['/src/session.ts'],
+            pass_criteria: 'Pass',
+            fail_criteria: 'Fail',
+            evidence_pattern: 'Pattern',
+            escalation_question: 'Escalation?',
+          },
+          {
+            text: 'Sub-question 3',
+            target_files: ['/src/session.ts'],
+            pass_criteria: 'Pass',
+            fail_criteria: 'Fail',
+            evidence_pattern: 'Pattern',
+            escalation_question: 'Escalation?',
+          }
+        ],
+      });
+
+      expect(subResult.status).toBe('rejected');
+      expect(subResult.reason).toBe('UNKNOWN_MAIN_QUESTION');
     });
   });
 });
