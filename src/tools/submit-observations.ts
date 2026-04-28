@@ -7,7 +7,7 @@
  * Accepts the agent's raw observation log from Phase 1.
  */
 
-import { sessionStore } from '../state/session-store.js';
+import { collaborativeStore } from '../state/collaborative-store.js';
 import { PhaseViolationError } from '../state/errors.js';
 import { 
   validateObservations, 
@@ -27,8 +27,8 @@ import type { ObservationsResponse } from '../types/domain.js';
 export function submitObservations(
   input: SubmitObservationsInput
 ): ObservationsResponse {
-  // Get session
-  const session = sessionStore.getSession(input.session_id);
+  // Get session from collaborative store
+  const session = collaborativeStore.getSession(input.session_id);
   
   // Validate phase
   if (session.phase !== 1) {
@@ -36,7 +36,7 @@ export function submitObservations(
       'submit_observations',
       session.phase,
       1,
-      session
+      session as any
     );
   }
   
@@ -45,10 +45,11 @@ export function submitObservations(
   assertObservationsValid(validationResult);
   
   // Store observations and advance phase
-  sessionStore.setObservations(session.session_id, input.observations);
+  const agentId = 'agent-0'; 
+  collaborativeStore.setObservations(session.session_id, agentId, input.observations);
   
   // Generate Phase 2 prompt
-  const prompt = generatePhase2Prompt(session);
+  const prompt = generatePhase2Prompt(session as any);
   
   return {
     status: 'accepted',

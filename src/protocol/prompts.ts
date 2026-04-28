@@ -4,8 +4,29 @@
  * Generates dynamic prompts based on session state.
  */
 
-import type { AuditSession } from '../types/domain.js';
+import type { AuditSession, CollaborativeSession } from '../types/domain.js';
 import { DEPTH_CONFIG } from '../types/domain.js';
+
+// ============================================================================
+// Helpers
+// ============================================================================
+
+function getObservations(session: any) {
+  if (session.observations !== undefined) return session.observations;
+  return session.observation_sets?.[0]?.observations || null;
+}
+
+function getMainQuestions(session: any) {
+  return session.main_questions || session.merged_questions || [];
+}
+
+function getSubQuestions(session: any) {
+  return session.sub_questions || session.sub_question_pool || [];
+}
+
+function getCheckpoints(session: any) {
+  return session.checkpoints || session.agent_checkpoints || [];
+}
 
 // ============================================================================
 // Phase 2 Prompt
@@ -14,9 +35,11 @@ import { DEPTH_CONFIG } from '../types/domain.js';
 /**
  * Generate Phase 2 prompt based on observations
  */
-export function generatePhase2Prompt(session: AuditSession): string {
+export function generatePhase2Prompt(session: AuditSession | CollaborativeSession): string {
   const config = DEPTH_CONFIG[session.depth];
-  const currentCount = session.main_questions.length;
+  const mainQuestions = getMainQuestions(session);
+  const currentCount = mainQuestions.length;
+  const observations = getObservations(session);
   
   let prompt = `
 ================================================================================
@@ -55,25 +78,25 @@ Phase 3 is UNLOCKED. You may:
 YOUR OBSERVATIONS SUMMARY
 --------------------------------------------------------------------------------
 
-Purpose: ${session.observations?.purpose || 'Not recorded'}
+Purpose: ${observations?.purpose || 'Not recorded'}
 
-Tech Stack (${session.observations?.tech_stack.length || 0} items):
-${session.observations?.tech_stack.map(s => `  - ${s.name} ${s.version}`).join('\n') || '  None recorded'}
+Tech Stack (${observations?.tech_stack?.length || 0} items):
+${observations?.tech_stack?.map((s: any) => `  - ${s.name} ${s.version}`).join('\n') || '  None recorded'}
 
-Entry Points (${session.observations?.entry_points.length || 0}):
-${session.observations?.entry_points.map(e => `  - ${e.type}: ${e.location}`).join('\n') || '  None recorded'}
+Entry Points (${observations?.entry_points?.length || 0}):
+${observations?.entry_points?.map((e: any) => `  - ${e.type}: ${e.location}`).join('\n') || '  None recorded'}
 
-Data Flows (${session.observations?.data_flows.length || 0}):
-${session.observations?.data_flows.map(d => `  - ${d.source} -> ${d.destination}`).join('\n') || '  None recorded'}
+Data Flows (${observations?.data_flows?.length || 0}):
+${observations?.data_flows?.map((d: any) => `  - ${d.source} -> ${d.destination}`).join('\n') || '  None recorded'}
 
-Auth Mechanisms (${session.observations?.auth_mechanisms.length || 0}):
-${session.observations?.auth_mechanisms.map(a => `  - ${a.mechanism}: ${a.location}`).join('\n') || '  None recorded'}
+Auth Mechanisms (${observations?.auth_mechanisms?.length || 0}):
+${observations?.auth_mechanisms?.map((a: any) => `  - ${a.mechanism}: ${a.location}`).join('\n') || '  None recorded'}
 
-Error Patterns (${session.observations?.error_patterns.length || 0}):
-${session.observations?.error_patterns.map(e => `  - ${e.pattern}`).join('\n') || '  None recorded'}
+Error Patterns (${observations?.error_patterns?.length || 0}):
+${observations?.error_patterns?.map((e: any) => `  - ${e.pattern}`).join('\n') || '  None recorded'}
 
-Test Coverage Notes (${session.observations?.test_coverage.length || 0}):
-${session.observations?.test_coverage.map(t => `  - ${t.component}: ${t.coverage}`).join('\n') || '  None recorded'}
+Test Coverage Notes (${observations?.test_coverage?.length || 0}):
+${observations?.test_coverage?.map((t: any) => `  - ${t.component}: ${t.coverage}`).join('\n') || '  None recorded'}
 
 --------------------------------------------------------------------------------
 QUESTION GENERATION GUIDANCE
@@ -108,10 +131,11 @@ Use submit_question tool for each question.
 /**
  * Generate Phase 3 prompt for sub-question generation
  */
-export function generatePhase3Prompt(session: AuditSession): string {
+export function generatePhase3Prompt(session: AuditSession | CollaborativeSession): string {
   const config = DEPTH_CONFIG[session.depth];
-  const pendingQuestions = session.main_questions.filter(
-    mq => mq.sub_question_ids.length === 0
+  const mainQuestions = getMainQuestions(session);
+  const pendingQuestions = mainQuestions.filter(
+    (mq: any) => mq.sub_question_ids.length === 0
   );
   
   let prompt = `
@@ -168,7 +192,7 @@ Use submit_sub_questions tool with main_question_id: ${mq.id}
 /**
  * Generate Phase 4 prompt for investigation
  */
-export function generatePhase4Prompt(session: AuditSession): string {
+export function generatePhase4Prompt(session: AuditSession | CollaborativeSession): string {
   let prompt = `
 ================================================================================
 PHASE 4: INVESTIGATION
@@ -192,18 +216,20 @@ WORK ETHIC:
 `;
 
   // Add pending sub-questions
-  const mainQuestions = session.main_questions;
+  const mainQuestions = getMainQuestions(session);
+  const allSubQuestions = getSubQuestions(session);
+  const checkpoints = getCheckpoints(session);
   
   for (const mq of mainQuestions) {
-    const subQuestions = session.sub_questions.filter(
-      sq => sq.main_question_id === mq.id
+    const subQuestions = allSubQuestions.filter(
+      (sq: any) => sq.main_question_id === mq.id
     );
     const answeredCount = subQuestions.filter(
-      sq => session.findings.some(f => f.sub_question_id === sq.id)
+      (sq: any) => session.findings.some((f: any) => f.sub_question_id === sq.id)
     ).length;
     
-    const isCheckpointed = session.checkpoints.some(
-      cp => cp.main_question_id === mq.id
+    const isCheckpointed = checkpoints.some(
+      (cp: any) => cp.main_question_id === mq.id
     );
     
     prompt += `
@@ -219,7 +245,7 @@ MAIN QUESTION: ${mq.text}
       
       for (const sq of subQuestions) {
         const hasFinding = session.findings.some(
-          f => f.sub_question_id === sq.id
+          (f: any) => f.sub_question_id === sq.id
         );
         
         prompt += `
@@ -250,22 +276,24 @@ MAIN QUESTION: ${mq.text}
 /**
  * Generate Phase 5 prompt for report synthesis
  */
-export function generatePhase5Prompt(session: AuditSession): string {
+export function generatePhase5Prompt(session: AuditSession | CollaborativeSession): string {
+  const mainQuestions = getMainQuestions(session);
+  const subQuestions = getSubQuestions(session);
   const summary = {
-    mainQuestions: session.main_questions.length,
-    subQuestions: session.sub_questions.length,
+    mainQuestions: mainQuestions.length,
+    subQuestions: subQuestions.length,
     findings: session.findings.length,
     verdicts: {
-      PASS: session.findings.filter(f => f.verdict === 'PASS').length,
-      FAIL: session.findings.filter(f => f.verdict === 'FAIL').length,
-      SUSPICIOUS: session.findings.filter(f => f.verdict === 'SUSPICIOUS').length,
-      UNCERTAIN: session.findings.filter(f => f.verdict === 'UNCERTAIN').length,
+      PASS: session.findings.filter((f: any) => f.verdict === 'PASS').length,
+      FAIL: session.findings.filter((f: any) => f.verdict === 'FAIL').length,
+      SUSPICIOUS: session.findings.filter((f: any) => f.verdict === 'SUSPICIOUS').length,
+      UNCERTAIN: session.findings.filter((f: any) => f.verdict === 'UNCERTAIN').length,
     },
     severities: {
-      info: session.findings.filter(f => f.severity === 'info').length,
-      warning: session.findings.filter(f => f.severity === 'warning').length,
-      critical: session.findings.filter(f => f.severity === 'critical').length,
-    catastrophic: session.findings.filter(f => f.severity === 'catastrophic').length,
+      info: session.findings.filter((f: any) => f.severity === 'info').length,
+      warning: session.findings.filter((f: any) => f.severity === 'warning').length,
+      critical: session.findings.filter((f: any) => f.severity === 'critical').length,
+    catastrophic: session.findings.filter((f: any) => f.severity === 'catastrophic').length,
   }};
 
 

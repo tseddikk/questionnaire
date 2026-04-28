@@ -7,7 +7,7 @@
  * Accepts investigation results for individual sub-questions.
  */
 
-import { sessionStore } from '../state/session-store.js';
+import { collaborativeStore } from '../state/collaborative-store.js';
 import { PhaseViolationError } from '../state/errors.js';
 import { validateFindingForSubmission } from '../validation/finding-validator.js';
 import type { SubmitFindingInput } from '../types/schemas.js';
@@ -22,7 +22,7 @@ import type { FindingResponse, Finding } from '../types/domain.js';
  */
 export function submitFinding(input: SubmitFindingInput): FindingResponse {
   // Get session
-  const session = sessionStore.getSession(input.session_id);
+  const session = collaborativeStore.getSession(input.session_id);
   
   // Validate phase
   if (session.phase !== 4) {
@@ -30,12 +30,12 @@ export function submitFinding(input: SubmitFindingInput): FindingResponse {
       'submit_finding',
       session.phase,
       4,
-      session
+      session as any
     );
   }
   
   // Verify sub-question exists
-  const subQuestion = sessionStore.getSubQuestion(
+  const subQuestion = collaborativeStore.getSubQuestion(
     session.session_id,
     input.sub_question_id
   );
@@ -49,7 +49,7 @@ export function submitFinding(input: SubmitFindingInput): FindingResponse {
   }
   
   // Check if finding already exists for this sub-question
-  if (sessionStore.hasFindingForSubQuestion(session.session_id, input.sub_question_id)) {
+  if (collaborativeStore.hasFindingForSubQuestion(session.session_id, input.sub_question_id)) {
     return {
       status: 'rejected',
       reason: 'MISSING_SUSPICION_RATIONALE',
@@ -86,14 +86,16 @@ export function submitFinding(input: SubmitFindingInput): FindingResponse {
   }
 
   // Store the finding
-  const finding = sessionStore.addFinding(
+  const agentId = 'agent-0';
+  const finding = collaborativeStore.addFinding(
     session.session_id,
+    agentId,
     findingInput
   );
   
   return {
     status: 'accepted',
-    finding_id: finding.id,
+    finding_id: finding.finding_id,
   };
 }
 
@@ -104,8 +106,8 @@ export function areAllSubQuestionsAnswered(
   sessionId: string,
   mainQuestionId: string
 ): boolean {
-  const session = sessionStore.getSession(sessionId);
-  const subQuestions = session.sub_questions.filter(
+  const session = collaborativeStore.getSession(sessionId);
+  const subQuestions = session.sub_question_pool.filter(
     sq => sq.main_question_id === mainQuestionId
   );
   
@@ -121,8 +123,8 @@ export function getUnansweredSubQuestions(
   sessionId: string,
   mainQuestionId: string
 ): { id: string; text: string }[] {
-  const session = sessionStore.getSession(sessionId);
-  const subQuestions = session.sub_questions.filter(
+  const session = collaborativeStore.getSession(sessionId);
+  const subQuestions = session.sub_question_pool.filter(
     sq => sq.main_question_id === mainQuestionId
   );
 

@@ -9,7 +9,7 @@
  * This tool is read-only and never triggers regeneration.
  */
 
-import { sessionStore } from '../state/session-store.js';
+import { collaborativeStore } from '../state/collaborative-store.js';
 import type { HeatMap } from '../types/domain.js';
 
 // ============================================================================
@@ -42,7 +42,7 @@ export interface GetHeatMapResponse {
  * Get the heat map for a session
  */
 export function getHeatMap(input: GetHeatMapInput): GetHeatMapResponse {
-  const session = sessionStore.getSession(input.session_id);
+  const session = collaborativeStore.getSession(input.session_id);
 
   // Heat map must exist (generated in Phase 0.5)
   if (!session.heat_map) {

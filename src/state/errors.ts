@@ -10,7 +10,7 @@
  * - action: Concrete recovery instruction
  */
 
-import type { RejectionReason, AuditPhase, AuditSession } from '../types/domain.js';
+import type { RejectionReason, AuditPhase, AuditSession, CollaborativeSession } from '../types/domain.js';
 
 // ============================================================================
 // Error Response Types
@@ -240,7 +240,7 @@ export class PhaseViolationError extends AuditError {
     tool: string,
     currentPhase: AuditPhase,
     requiredPhase: AuditPhase,
-    sessionState?: AuditSession
+    sessionState?: AuditSession | CollaborativeSession
   ) {
     const currentPhaseName = getPhaseName(currentPhase);
     const nextTool = getNextRequiredTool(currentPhase);
@@ -288,7 +288,7 @@ function getNextRequiredTool(phase: AuditPhase): string {
   return tools[phase] || 'Unknown';
 }
 
-function getNextRequiredAction(phase: AuditPhase, _sessionState?: AuditSession): string {
+function getNextRequiredAction(phase: AuditPhase, _sessionState?: AuditSession | CollaborativeSession): string {
   const actions: Record<number, string> = {
     0: 'Call initialize_audit to start a new session.',
     1: 'Call submit_observations with your Phase 1 findings.',
@@ -305,7 +305,7 @@ function buildSessionStateContext(
   phaseName: string,
   nextTool: string,
   nextAction: string,
-  sessionState?: AuditSession
+  sessionState?: AuditSession | CollaborativeSession
 ): SessionStateContext {
   const context: SessionStateContext = {
     current_phase: currentPhase,
@@ -315,8 +315,11 @@ function buildSessionStateContext(
   };
 
   if (sessionState) {
-    context.main_questions_accepted = sessionState.main_questions.length;
-    context.sub_question_sets_submitted = sessionState.sub_questions.length;
+    const mainQuestions = (sessionState as any).main_questions || (sessionState as any).merged_questions || [];
+    const subQuestions = (sessionState as any).sub_questions || (sessionState as any).sub_question_pool || [];
+
+    context.main_questions_accepted = mainQuestions.length;
+    context.sub_question_sets_submitted = subQuestions.length;
     context.sub_question_sets_remaining = (context.main_questions_accepted ?? 0) - (context.sub_question_sets_submitted ?? 0);
   }
 

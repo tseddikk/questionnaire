@@ -8,7 +8,7 @@
  * Returns structured error responses per the error response contract.
  */
 
-import { sessionStore } from '../state/session-store.js';
+import { collaborativeStore } from '../state/collaborative-store.js';
 import {
   PhaseViolationError,
   QuestionLimitReachedError,
@@ -29,7 +29,7 @@ export function submitQuestion(input: SubmitQuestionInput): QuestionResponse | E
   const toolName = 'submit_question';
 
   // Get session
-  const session = sessionStore.getSession(input.session_id);
+  const session = collaborativeStore.getSession(input.session_id);
   if (!session) {
     // This will be handled by session store, but we ensure proper error format
     throw new Error(`Session not found: ${input.session_id}`);
@@ -41,13 +41,13 @@ export function submitQuestion(input: SubmitQuestionInput): QuestionResponse | E
       toolName,
       session.phase,
       2,
-      session
+      session as any
     );
   }
 
   // Check if we've reached max questions
   const config = DEPTH_CONFIG[session.depth];
-  const currentCount = sessionStore.getMainQuestionCount(session.session_id);
+  const currentCount = collaborativeStore.getMainQuestionCount(session.session_id);
 
   if (currentCount >= config.max_main_questions) {
     throw new QuestionLimitReachedError(toolName, currentCount);
@@ -73,8 +73,10 @@ export function submitQuestion(input: SubmitQuestionInput): QuestionResponse | E
   }
 
   // Store the question
-  const question = sessionStore.addMainQuestion(
+  const agentId = 'agent-0';
+  const question = collaborativeStore.addMainQuestion(
     session.session_id,
+    agentId,
     input.question as Omit<MainQuestion, 'id' | 'sub_question_ids'>
   );
 
@@ -82,7 +84,7 @@ export function submitQuestion(input: SubmitQuestionInput): QuestionResponse | E
 
   // Advance to Phase 3 if minimum questions reached
   if (newCount >= config.min_main_questions && session.phase === 2) {
-    sessionStore.advancePhase(session.session_id, 3);
+    collaborativeStore.advancePhase(session.session_id, 3);
   }
 
   return {
@@ -96,10 +98,10 @@ export function submitQuestion(input: SubmitQuestionInput): QuestionResponse | E
  * Check if Phase 2 is complete (min questions reached)
  */
 export function isPhase2Complete(sessionId: string): boolean {
-  const session = sessionStore.getSession(sessionId);
+  const session = collaborativeStore.getSession(sessionId);
   if (!session) return false;
   const config = DEPTH_CONFIG[session.depth];
-  const count = sessionStore.getMainQuestionCount(sessionId);
+  const count = collaborativeStore.getMainQuestionCount(sessionId);
   return count >= config.min_main_questions;
 }
 
@@ -108,7 +110,7 @@ export function isPhase2Complete(sessionId: string): boolean {
  */
 export function maybeAdvanceToPhase3(sessionId: string): boolean {
   if (isPhase2Complete(sessionId)) {
-    sessionStore.advancePhase(sessionId, 3);
+    collaborativeStore.advancePhase(sessionId, 3);
     return true;
   }
   return false;

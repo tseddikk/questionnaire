@@ -7,7 +7,7 @@
  * Called after all main questions are checkpointed. Returns accumulated data.
  */
 
-import { sessionStore } from '../state/session-store.js';
+import { collaborativeStore } from '../state/collaborative-store.js';
 import { PhaseViolationError } from '../state/errors.js';
 import type { FinalizeReportInput } from '../types/schemas.js';
 import type { 
@@ -130,8 +130,6 @@ function generateCrossCuttingConcerns(
 // Collaborative Preconditions (Extension)
 // ============================================================================
 
-import { collaborativeStore } from '../state/collaborative-store.js';
-
 interface PreconditionFailure {
   condition: string;
   detail: string;
@@ -209,9 +207,8 @@ function checkCollaborativePreconditions(sessionId: string): PreconditionFailure
  * Extended with collaborative preconditions
  */
 export function finalizeReport(input: FinalizeReportInput): FinalizeResponse {
-  // Get session from both stores (base and collaborative share the same session concept)
-  const session = sessionStore.getSession(input.session_id);
-  const collabSession = collaborativeStore.getSession(input.session_id);
+  // Get session from collaborative store
+  const session = collaborativeStore.getSession(input.session_id);
 
   // Validate phase - must be phase 4 (investigation complete) or 5 (already finalizing)
   if (session.phase !== 4 && session.phase !== 5) {
@@ -219,7 +216,7 @@ export function finalizeReport(input: FinalizeReportInput): FinalizeResponse {
       'finalize_report',
       session.phase,
       4,
-      session
+      session as any
     );
   }
 
@@ -235,13 +232,13 @@ export function finalizeReport(input: FinalizeReportInput): FinalizeResponse {
   }
 
   // Check if all main questions are checkpointed
-  const remaining = sessionStore.getRemainingMainQuestions(session.session_id);
+  const remaining = collaborativeStore.getRemainingMainQuestions(session.session_id);
   if (remaining.length > 0) {
     return {
       status: 'report_authorized',
       findings_summary: generateFindingSummary(session.findings),
       cross_cutting_concerns: [],
-      escalations: session.escalations,
+      escalations: [],
       report_schema: {
         version: '1.0',
         required_sections: [
@@ -257,12 +254,12 @@ export function finalizeReport(input: FinalizeReportInput): FinalizeResponse {
 
   // Ensure phase is 5
   if (session.phase === 4) {
-    session.phase = 5;
+    collaborativeStore.advancePhase(session.session_id, 5);
   }
 
   // Generate report data
   const findingsSummary = generateFindingSummary(session.findings);
-  const crossCuttingConcerns = generateCrossCuttingConcerns(session.checkpoints);
+  const crossCuttingConcerns = generateCrossCuttingConcerns(session.agent_checkpoints as any);
 
   // Calculate heat map alignment if heat map exists
   let heatMapAlignment = null;
@@ -286,10 +283,10 @@ export function finalizeReport(input: FinalizeReportInput): FinalizeResponse {
     status: 'report_authorized',
     findings_summary: findingsSummary,
     cross_cutting_concerns: crossCuttingConcerns,
-    escalations: session.escalations,
+    escalations: [],
     heat_map_alignment: heatMapAlignment,
-    adjudications: collabSession.adjudications,
-    unresolved_findings: collabSession.unresolved_findings,
+    adjudications: session.adjudications,
+    unresolved_findings: session.unresolved_findings,
     report_schema: {
       version: '1.0',
       required_sections: [

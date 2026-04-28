@@ -7,6 +7,7 @@ import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { sessionStore } from '../src/state/session-store.js';
+import { collaborativeStore } from '../src/state/collaborative-store.js';
 import { initializeAudit } from '../src/tools/initialize-audit.js';
 import { submitObservations } from '../src/tools/submit-observations.js';
 import { submitQuestion } from '../src/tools/submit-question.js';
@@ -20,10 +21,14 @@ describe('MCP Tools', () => {
 
   beforeEach(() => {
     repoPath = mkdtempSync(join(tmpdir(), 'questionnaire-test-repo-'));
-    // Clear singleton store between tests
+    // Clear singleton stores between tests
     const sessions = sessionStore.getAllSessions();
     for (const session of sessions) {
       sessionStore.deleteSession(session.session_id);
+    }
+    const collabSessions = collaborativeStore.getAllSessions();
+    for (const session of collabSessions) {
+      collaborativeStore.deleteSession(session.session_id);
     }
   });
 
@@ -55,7 +60,7 @@ describe('MCP Tools', () => {
       };
 
       const result = await initializeAudit(input);
-      const session = sessionStore.getSession(result.session_id);
+      const session = collaborativeStore.getSession(result.session_id);
 
       expect(session.phase).toBe(1);
       expect(session.domain).toBe('performance');

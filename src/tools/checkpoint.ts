@@ -7,7 +7,7 @@
  * Called after all sub-questions for a main question have findings.
  */
 
-import { sessionStore } from '../state/session-store.js';
+import { collaborativeStore } from '../state/collaborative-store.js';
 import { PhaseViolationError, CheckpointIncompleteError } from '../state/errors.js';
 import { getUnansweredSubQuestions, areAllSubQuestionsAnswered } from './submit-finding.js';
 import type { CheckpointInput } from '../types/schemas.js';
@@ -110,8 +110,8 @@ function analyzeCrossCuttingSignals(
  * Checkpoint a main question
  */
 export function checkpoint(input: CheckpointInput): CheckpointResponse {
-  // Get session
-  const session = sessionStore.getSession(input.session_id);
+  // Get session from collaborative store
+  const session = collaborativeStore.getSession(input.session_id);
   
   // Validate phase
   if (session.phase !== 4) {
@@ -119,12 +119,12 @@ export function checkpoint(input: CheckpointInput): CheckpointResponse {
       'checkpoint',
       session.phase,
       4,
-      session
+      session as any
     );
   }
   
   // Verify main question exists
-  const mainQuestion = sessionStore.getMainQuestion(
+  const mainQuestion = collaborativeStore.getMainQuestion(
     session.session_id,
     input.main_question_id
   );
@@ -138,11 +138,11 @@ export function checkpoint(input: CheckpointInput): CheckpointResponse {
   }
   
   // Check if already checkpointed
-  if (sessionStore.isCheckpointed(session.session_id, input.main_question_id)) {
+  if (collaborativeStore.isCheckpointed(session.session_id, input.main_question_id)) {
     return {
       status: 'checkpoint_accepted',
-      main_question_index: session.main_questions.findIndex(q => q.id === input.main_question_id),
-      questions_remaining: sessionStore.getRemainingMainQuestions(session.session_id).length,
+      main_question_index: session.merged_questions.findIndex(q => q.id === input.main_question_id),
+      questions_remaining: collaborativeStore.getRemainingMainQuestions(session.session_id).length,
       cross_cutting_signals: [],
     };
   }
@@ -154,25 +154,27 @@ export function checkpoint(input: CheckpointInput): CheckpointResponse {
   }
   
   // Get findings for this main question
-  const findings = sessionStore.getFindingsForMainQuestion(
+  const findings = collaborativeStore.getFindingsForMainQuestion(
     session.session_id,
     input.main_question_id
   );
   
   // Analyze cross-cutting signals
-  const crossCuttingSignals = analyzeCrossCuttingSignals(findings);
+  const crossCuttingSignals = analyzeCrossCuttingSignals(findings as any[]);
   
   // Record checkpoint
-  sessionStore.addCheckpoint(
+  const agentId = 'agent-0';
+  collaborativeStore.addCheckpoint(
     session.session_id,
+    agentId,
     input.main_question_id,
     crossCuttingSignals
   );
   
-  const mainQuestionIndex = session.main_questions.findIndex(
+  const mainQuestionIndex = session.merged_questions.findIndex(
     q => q.id === input.main_question_id
   );
-  const remaining = sessionStore.getRemainingMainQuestions(session.session_id);
+  const remaining = collaborativeStore.getRemainingMainQuestions(session.session_id);
   
   return {
     status: 'checkpoint_accepted',

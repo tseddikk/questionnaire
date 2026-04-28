@@ -7,7 +7,7 @@
  * Creates a new audit session and returns instructions for the agent.
  */
 
-import { sessionStore } from '../state/session-store.js';
+import { collaborativeStore } from '../state/collaborative-store.js';
 import { generateInstructions } from '../protocol/instructions.js';
 import { generateHeatMap, formatHeatMapForInstructions } from '../heat-map/heat-map-generator.js';
 import type { InitializeAuditInput } from '../types/schemas.js';
@@ -22,11 +22,13 @@ import type { InitializeResponse } from '../types/domain.js';
  * Includes Phase 0.5: Heat Map Generation
  */
 export async function initializeAudit(input: InitializeAuditInput): Promise<InitializeResponse> {
-  // Create the session
-  const session = sessionStore.createSession(
+  // Create the session in the collaborative store
+  const agentId = 'agent-0'; // Default initiator ID
+  const session = collaborativeStore.createSession(
     input.repo_path,
     input.domain,
-    input.depth
+    input.depth,
+    agentId
   );
 
   // Phase 0.5: Generate Heat Map
@@ -41,7 +43,7 @@ export async function initializeAudit(input: InitializeAuditInput): Promise<Init
   session.heat_map = heatMap;
 
   // Advance to phase 1
-  sessionStore.advancePhase(session.session_id, 1);
+  collaborativeStore.advancePhase(session.session_id, 1);
 
   // Generate base instructions
   const baseInstructions = generateInstructions(input.domain, input.depth);

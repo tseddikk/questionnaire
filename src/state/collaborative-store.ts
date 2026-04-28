@@ -573,6 +573,72 @@ export class CollaborativeSessionStore {
   }
 
   /**
+   * Get all sessions
+   */
+  getAllSessions(): CollaborativeSession[] {
+    // Filter out expired sessions
+    const valid: CollaborativeSession[] = [];
+    const expired: string[] = [];
+
+    for (const [sessionId, session] of this.sessions.entries()) {
+      if (this.isSessionExpired(session)) {
+        expired.push(sessionId);
+      } else {
+        valid.push(session);
+      }
+    }
+
+    // Clean up expired
+    for (const sessionId of expired) {
+      this.sessions.delete(sessionId);
+      const repoPath = this.repoPaths.get(sessionId);
+      this.repoPaths.delete(sessionId);
+      removeFromGlobalRegistry(sessionId);
+      if (this.activeSessionId === sessionId) {
+        this.activeSessionId = null;
+      }
+      if (repoPath) {
+        try {
+          const sessionPath = this.getSessionPath(sessionId, repoPath);
+          if (existsSync(sessionPath)) {
+            unlinkSync(sessionPath);
+          }
+        } catch (e) {
+          // Ignore
+        }
+      }
+    }
+
+    return valid;
+  }
+
+  /**
+   * Delete a session
+   */
+  deleteSession(sessionId: string): boolean {
+    const repoPath = this.repoPaths.get(sessionId);
+    const existed = this.sessions.delete(sessionId);
+    this.repoPaths.delete(sessionId);
+    removeFromGlobalRegistry(sessionId);
+
+    if (this.activeSessionId === sessionId) {
+      this.activeSessionId = null;
+    }
+
+    if (existed && repoPath) {
+      try {
+        const sessionPath = this.getSessionPath(sessionId, repoPath);
+        if (existsSync(sessionPath)) {
+          unlinkSync(sessionPath);
+        }
+      } catch (e) {
+        console.error(`Failed to delete collaborative session file ${sessionId}:`, e);
+      }
+    }
+    return existed;
+  }
+
+  /**
    * Archive a session
    */
   archiveSession(sessionId: string, _reason: string): CollaborativeSession {
@@ -587,6 +653,253 @@ export class CollaborativeSessionStore {
     
     this.saveSession(session);
     return session;
+  }
+
+  /**
+   * Advance session to next phase
+   */
+  advancePhase(sessionId: string, newPhase: number): void {
+    const session = this.getSession(sessionId);
+
+    if (session.phase >= newPhase) {
+      throw new Error(`Cannot advance to phase ${newPhase} from phase ${session.phase}`);
+    }
+
+    session.phase = newPhase as any;
+    session.updated_at = new Date();
+    this.saveSession(session);
+  }
+
+  /**
+   * Set observations for a session (Standard/Single-agent mode)
+   */
+  setObservations(sessionId: string, agentId: string, observations: any): void {
+    const session = this.getSession(sessionId);
+
+    if (session.phase !== 1) {
+      throw new Error(`Cannot set observations in phase ${session.phase}`);
+    }
+
+    session.observation_sets.push({
+      agent_id: agentId,
+      observations,
+      submitted_at: new Date(),
+    });
+
+    session.phase = 2;
+    session.updated_at = new Date();
+    this.saveSession(session);
+  }
+
+  /**
+   * Add a main question (Standard/Single-agent mode)
+   */
+  addMainQuestion(
+    sessionId: string,
+    agentId: string,
+    question: any
+  ): any {
+    const session = this.getSession(sessionId);
+
+    if (session.phase !== 2) {
+      throw new Error(`Cannot add main questions in phase ${session.phase}`);
+    }
+
+    const fullQuestion = {
+      ...question,
+      id: uuidv4(),
+      sub_question_ids: [],
+    };
+
+    session.merged_questions.push(fullQuestion);
+    session.question_pool.push({
+      question: fullQuestion,
+      agent_id: agentId,
+    });
+
+    session.updated_at = new Date();
+    this.saveSession(session);
+    return fullQuestion;
+  }
+
+  /**
+   * Get main question count
+   */
+  getMainQuestionCount(sessionId: string): number {
+    return this.getSession(sessionId).merged_questions.length;
+  }
+
+  /**
+   * Get a main question by ID
+   */
+  getMainQuestion(sessionId: string, questionId: string): any | undefined {
+    const session = this.getSession(sessionId);
+    return session.merged_questions.find(q => q.id === questionId);
+  }
+
+  /**
+   * Get remaining main questions (without sub-questions)
+   */
+  getRemainingMainQuestions(sessionId: string): any[] {
+    const session = this.getSession(sessionId);
+    return session.merged_questions.filter(q => q.sub_question_ids.length === 0);
+  }
+
+  /**
+   * Add sub-questions for a main question
+   */
+  addSubQuestions(
+    sessionId: string,
+    mainQuestionId: string,
+    subQuestions: any[]
+  ): any[] {
+    const session = this.getSession(sessionId);
+
+    if (session.phase !== 3) {
+      throw new Error(`Cannot add sub-questions in phase ${session.phase}`);
+    }
+
+    const mainQuestion = session.merged_questions.find(q => q.id === mainQuestionId);
+    if (!mainQuestion) {
+      throw new Error(`Main question ${mainQuestionId} not found`);
+    }
+
+    const createdSubQuestions = subQuestions.map(sq => ({
+      ...sq,
+      id: uuidv4(),
+      main_question_id: mainQuestionId,
+    }));
+
+    session.sub_question_pool.push(...createdSubQuestions);
+    mainQuestion.sub_question_ids = createdSubQuestions.map(sq => sq.id);
+    session.updated_at = new Date();
+    this.saveSession(session);
+    return createdSubQuestions;
+  }
+
+  /**
+   * Get a sub-question by ID
+   */
+  getSubQuestion(sessionId: string, subQuestionId: string): any | undefined {
+    const session = this.getSession(sessionId);
+    return session.sub_question_pool.find(sq => sq.id === subQuestionId);
+  }
+
+  /**
+   * Add a finding (Standard/Single-agent mode)
+   */
+  addFinding(sessionId: string, agentId: string, finding: any): any {
+    const session = this.getSession(sessionId);
+
+    if (session.phase !== 4 && session.phase !== 5) {
+      throw new Error(`Cannot add findings in phase ${session.phase}`);
+    }
+
+    const agentFinding = {
+      ...finding,
+      agent_id: agentId,
+      finding_id: uuidv4(),
+    };
+
+    session.findings.push(agentFinding);
+    session.updated_at = new Date();
+    this.saveSession(session);
+    return agentFinding;
+  }
+
+  /**
+   * Check if finding exists for sub-question
+   */
+  hasFindingForSubQuestion(sessionId: string, subQuestionId: string): boolean {
+    const session = this.getSession(sessionId);
+    return session.findings.some(f => f.sub_question_id === subQuestionId);
+  }
+
+  /**
+   * Get findings for a main question
+   */
+  getFindingsForMainQuestion(sessionId: string, mainQuestionId: string): any[] {
+    const session = this.getSession(sessionId);
+    const mainQuestion = session.merged_questions.find(q => q.id === mainQuestionId);
+
+    if (!mainQuestion) {
+      return [];
+    }
+
+    return session.findings.filter(f =>
+      mainQuestion.sub_question_ids.includes(f.sub_question_id)
+    );
+  }
+
+  /**
+   * Get all findings for a session
+   */
+  getAllFindings(sessionId: string): any[] {
+    return this.getSession(sessionId).findings;
+  }
+
+  /**
+   * Add a checkpoint
+   */
+  addCheckpoint(
+    sessionId: string,
+    agentId: string,
+    mainQuestionId: string,
+    _crossCuttingSignals: any[] = []
+  ): void {
+    const session = this.getSession(sessionId);
+
+    if (session.phase !== 4) {
+      throw new Error(`Cannot add checkpoints in phase ${session.phase}`);
+    }
+
+    session.agent_checkpoints.push({
+      agent_id: agentId,
+      main_question_id: mainQuestionId,
+      completed_at: new Date(),
+    });
+
+    // In a real collaborative scenario, we might want to store signals per agent/question
+    // For now, we'll just track that the agent checkpointed it.
+    // If we want to support the same signals as the standard store:
+    // we might need to add a field to AgentCheckpoint or the session.
+
+    session.updated_at = new Date();
+    this.saveSession(session);
+  }
+
+  /**
+   * Check if main question is checkpointed
+   */
+  isCheckpointed(sessionId: string, mainQuestionId: string): boolean {
+    const session = this.getSession(sessionId);
+    return session.agent_checkpoints.some(cp => cp.main_question_id === mainQuestionId);
+  }
+
+  /**
+   * Set final report
+   */
+  setReport(sessionId: string, report: any): void {
+    const session = this.getSession(sessionId);
+    session.report = report;
+    session.session_state = 'finalized';
+    session.updated_at = new Date();
+    this.saveSession(session);
+  }
+
+  /**
+   * Get session statistics
+   */
+  getSessionStats(sessionId: string): any {
+    const session = this.getSession(sessionId);
+
+    return {
+      mainQuestions: session.merged_questions.length,
+      subQuestions: session.sub_question_pool.length,
+      findings: session.findings.length,
+      checkpoints: session.agent_checkpoints.length,
+      agents: session.agents.length,
+    };
   }
 }
 

@@ -7,7 +7,7 @@
  * Accepts decomposition of a main question into sub-questions.
  */
 
-import { sessionStore } from '../state/session-store.js';
+import { collaborativeStore } from '../state/collaborative-store.js';
 import { PhaseViolationError } from '../state/errors.js';
 import { validateSubQuestions } from '../validation/question-validator.js';
 import type { SubmitSubQuestionsInput } from '../types/schemas.js';
@@ -24,7 +24,7 @@ export function submitSubQuestions(
   input: SubmitSubQuestionsInput
 ): SubQuestionsResponse {
   // Get session
-  const session = sessionStore.getSession(input.session_id);
+  const session = collaborativeStore.getSession(input.session_id);
 
   // Validate phase
   if (session.phase !== 3) {
@@ -32,12 +32,12 @@ export function submitSubQuestions(
       'submit_sub_questions',
       session.phase,
       3,
-      session
+      session as any
     );
   }
 
   // Verify main question exists
-  const mainQuestion = sessionStore.getMainQuestion(
+  const mainQuestion = collaborativeStore.getMainQuestion(
     session.session_id,
     input.main_question_id
   );
@@ -72,20 +72,20 @@ export function submitSubQuestions(
 
   // Store sub-questions
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  sessionStore.addSubQuestions(
+  collaborativeStore.addSubQuestions(
     session.session_id,
     input.main_question_id,
     input.sub_questions as any[]
   );
 
   // Check if all main questions have sub-questions
-  const allHaveSubQuestions = session.main_questions.every(mq =>
+  const allHaveSubQuestions = session.merged_questions.every(mq =>
     mq.sub_question_ids.length > 0
   );
 
   // If all have sub-questions, advance to Phase 4
   if (allHaveSubQuestions) {
-    sessionStore.advancePhase(session.session_id, 4);
+    collaborativeStore.advancePhase(session.session_id, 4);
   }
 
   return {
@@ -98,8 +98,9 @@ export function submitSubQuestions(
  * Get remaining main questions that need sub-questions
  */
 export function getRemainingMainQuestions(sessionId: string): string[] {
-  const session = sessionStore.getSession(sessionId);
-  return session.main_questions
+  const session = collaborativeStore.getSession(sessionId);
+  if (!session) return [];
+  return session.merged_questions
     .filter(mq => mq.sub_question_ids.length === 0)
     .map(mq => mq.id);
 }
