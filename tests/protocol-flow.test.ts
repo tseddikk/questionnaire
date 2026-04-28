@@ -163,7 +163,7 @@ describe('Complete Protocol Flow', () => {
 
       const session = collaborativeStore.getSession(initResult.session_id);
       expect(session.phase).toBe(2);
-      expect(session.observations).toBeDefined();
+      expect(session.observation_sets && session.observation_sets[0]?.observations).toBeDefined();
       
       // Clean up
       collaborativeStore.deleteSession(initResult.session_id);
@@ -248,7 +248,7 @@ describe('Complete Protocol Flow', () => {
 
       const session = collaborativeStore.getSession(initResult.session_id);
       expect(session.phase).toBe(3); // Should have advanced
-      expect(session.main_questions.length).toBe(5);
+      expect(session.merged_questions.length).toBe(5);
       
       // Clean up
       collaborativeStore.deleteSession(initResult.session_id);
@@ -401,7 +401,7 @@ describe('Complete Protocol Flow', () => {
       expect(session.phase).toBe(4);
       
       // Verify all main questions have sub_question_ids
-      for (const mq of session.main_questions) {
+      for (const mq of session.merged_questions) {
         expect(mq.sub_question_ids.length).toBeGreaterThan(0);
       }
       
@@ -709,7 +709,7 @@ describe('Complete Protocol Flow', () => {
 
       // Get the main question ID
       const session = collaborativeStore.getSession(sessionId);
-      const firstMainQuestionId = session.main_questions[0].id;
+      const firstMainQuestionId = session.merged_questions[0].id;
 
       // Checkpoint should work now
       const checkpointResult = checkpoint({
