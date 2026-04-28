@@ -260,16 +260,8 @@ export class CollaborativeSessionStore {
     this.loadSessionsFromRepo(repoPath);
     this.cleanupExpiredSessionsForRepo(repoPath);
 
-    // Check one active session rule
-    if (this.activeSessionId) {
-      const active = this.sessions.get(this.activeSessionId);
-      if (active && active.session_state !== 'archived' && active.session_state !== 'archived_incomplete') {
-        // Check if it's expired
-        if (!this.isSessionExpired(active)) {
-          throw new Error(`SESSION_ALREADY_ACTIVE: Session ${this.activeSessionId} is active`);
-        }
-      }
-    }
+    // Note: One active session rule is per-repo, enforced by the calling code
+    // Each repo can have one active session
 
     const sessionId = uuidv4();
     const now = new Date();
