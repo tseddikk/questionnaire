@@ -45,7 +45,7 @@ export function submitSubQuestions(
   if (!mainQuestion) {
     return {
       status: 'rejected',
-      reason: 'UNKNOWN_MAIN_QUESTION',
+      reason: 'QUESTION_NOT_FOUND',
       guidance: `Main question ${input.main_question_id} not found in this session.`,
     };
   }

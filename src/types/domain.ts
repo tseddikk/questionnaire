@@ -38,7 +38,7 @@ export type RejectionReason =
   | 'ESCALATION_REQUIRED'
   | 'CHECKPOINT_INCOMPLETE'
   | 'SUB_QUESTION_COUNT_VIOLATION'
-  | 'UNKNOWN_MAIN_QUESTION';
+  | 'QUESTION_NOT_FOUND';
 
 export type QuestionPattern =
   | 'ASYNC_FAILURE'

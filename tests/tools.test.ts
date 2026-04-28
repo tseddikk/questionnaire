@@ -7,7 +7,7 @@ import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { sessionStore } from '../src/state/session-store.js';
-import { collaborativeStore } from '../src/state/collaborative-store.js';
+import { collaborativeStore, setRegistryPath } from '../src/state/collaborative-store.js';
 import { initializeAudit } from '../src/tools/initialize-audit.js';
 import { submitObservations } from '../src/tools/submit-observations.js';
 import { submitQuestion } from '../src/tools/submit-question.js';
@@ -22,15 +22,13 @@ describe('MCP Tools', () => {
 
   beforeEach(() => {
     repoPath = mkdtempSync(join(tmpdir(), 'questionnaire-test-repo-'));
+    setRegistryPath(join(repoPath, 'test-registry.json'));
     // Clear singleton stores between tests
     const sessions = sessionStore.getAllSessions();
     for (const session of sessions) {
       sessionStore.deleteSession(session.session_id);
     }
-    const collabSessions = collaborativeStore.getAllSessions();
-    for (const session of collabSessions) {
-      collaborativeStore.deleteSession(session.session_id);
-    }
+    collaborativeStore.clearMemoryOnly();
   });
 
   afterEach(() => {
@@ -195,8 +193,8 @@ describe('MCP Tools', () => {
         question: {
           text: 'Where is user input validated in the session store, and what happens if validation is bypassed?',
           target_files: ['/src/session.ts'],
-          suspicion_rationale: 'The session store accepts user input without clear validation boundaries.',
-          edge_case_targeted: 'Malformed input that bypasses frontend validation',
+          suspicion_rationale: 'The session store accepts user input without clear validation boundaries of at least 20 chars.',
+          edge_case_targeted: 'Malformed input that bypasses frontend validation and other edge cases of sufficient length.',
           domain_pattern: 'VALIDATION_BYPASS',
         },
       };
@@ -236,8 +234,8 @@ describe('MCP Tools', () => {
         question: {
           text: 'Is authentication implemented?',
           target_files: ['/src/auth.ts'],
-          suspicion_rationale: 'Short description here for testing.',
-          edge_case_targeted: 'Test edge case description',
+          suspicion_rationale: 'Short description here for testing which must be longer than 20 chars.',
+          edge_case_targeted: 'Test edge case description which must also be long enough for the validator.',
           domain_pattern: 'VALIDATION_BYPASS',
         },
       };
@@ -275,11 +273,14 @@ describe('MCP Tools', () => {
           question: {
             text: `Question ${i}: Where is user input validated, and what happens if validation is bypassed?`,
             target_files: [`/src/file${i}.ts`],
-            suspicion_rationale: `Rationale ${i}`,
-            edge_case_targeted: `Edge case ${i}`,
+            suspicion_rationale: `The validation boundaries for component ${i} appear to be inconsistent based on the data flows observed in Phase 1.`,
+            edge_case_targeted: `Malformed or oversized input payloads that might bypass the primary validation layer in ${i}.`,
             domain_pattern: 'VALIDATION_BYPASS',
           },
         }) as any;
+        if (qResult.status === 'error') {
+           throw new Error(qResult.message);
+        }
         questionIds.push(qResult.question_id);
       }
 
@@ -296,28 +297,28 @@ describe('MCP Tools', () => {
         main_question_id: qId,
         sub_questions: [
           {
-            text: 'Sub-question 1',
+            text: 'Sub-question 1: Does the session store implementation enforce strict validation on all incoming set requests?',
             target_files: ['/src/session.ts'],
-            pass_criteria: 'Pass',
-            fail_criteria: 'Fail',
-            evidence_pattern: 'Pattern',
-            escalation_question: 'Escalation?',
+            pass_criteria: 'The implementation correctly validates all input fields against the defined domain schema before storage.',
+            fail_criteria: 'The implementation allows arbitrary fields or unvalidated data to be persisted in the session store.',
+            evidence_pattern: 'Look for Zod parse or manual validation checks in the setObservations method.',
+            escalation_question: 'Can we craft a payload that injects malicious keys into the session store via unvalidated input?',
           },
           {
-            text: 'Sub-question 2',
+            text: 'Sub-question 2: Are there any implicit mutations of global state during the session retrieval process?',
             target_files: ['/src/session.ts'],
-            pass_criteria: 'Pass',
-            fail_criteria: 'Fail',
-            evidence_pattern: 'Pattern',
-            escalation_question: 'Escalation?',
+            pass_criteria: 'Retrieving a session is a side-effect free operation that only reads data and does not modify global state.',
+            fail_criteria: 'The retrieval process implicitly updates counters, registries, or other global state without explicit intent.',
+            evidence_pattern: 'Search for any write operations or Map.set calls within the getSession and loadSessions methods.',
+            escalation_question: 'Could multiple concurrent read requests lead to a race condition in the global session registry?',
           },
           {
-            text: 'Sub-question 3',
+            text: 'Sub-question 3: Does the session expiration logic correctly handle edge cases around the 24-hour TTL boundary?',
             target_files: ['/src/session.ts'],
-            pass_criteria: 'Pass',
-            fail_criteria: 'Fail',
-            evidence_pattern: 'Pattern',
-            escalation_question: 'Escalation?',
+            pass_criteria: 'Sessions older than 24 hours are reliably identified as expired and cleared from both memory and disk.',
+            fail_criteria: 'Sessions can persist beyond the TTL due to timezone mismatches or incorrect comparison logic in isExpired.',
+            evidence_pattern: 'Examine the timestamp comparison in the isSessionExpired method for potential off-by-one errors.',
+            escalation_question: 'Is it possible to prolong a session indefinitely by making frequent small updates that reset the TTL?',
           }
         ],
       });
@@ -328,7 +329,7 @@ describe('MCP Tools', () => {
       expect(subResult.sub_question_ids?.length).toBe(3);
     });
 
-    it('should return UNKNOWN_MAIN_QUESTION for invalid question IDs', async () => {
+    it('should return QUESTION_NOT_FOUND for invalid question IDs', async () => {
       const { sessionId } = await setupPhase3();
 
       const subResult = submitSubQuestions({
@@ -336,34 +337,18 @@ describe('MCP Tools', () => {
         main_question_id: '4244529c-b907-48b6-a541-0411baa27aad', // Some random ID
         sub_questions: [
           {
-            text: 'Sub-question 1',
+            text: 'Sub-question 1: Does the session store implementation enforce strict validation on all incoming set requests?',
             target_files: ['/src/session.ts'],
-            pass_criteria: 'Pass',
-            fail_criteria: 'Fail',
-            evidence_pattern: 'Pattern',
-            escalation_question: 'Escalation?',
-          },
-          {
-            text: 'Sub-question 2',
-            target_files: ['/src/session.ts'],
-            pass_criteria: 'Pass',
-            fail_criteria: 'Fail',
-            evidence_pattern: 'Pattern',
-            escalation_question: 'Escalation?',
-          },
-          {
-            text: 'Sub-question 3',
-            target_files: ['/src/session.ts'],
-            pass_criteria: 'Pass',
-            fail_criteria: 'Fail',
-            evidence_pattern: 'Pattern',
-            escalation_question: 'Escalation?',
+            pass_criteria: 'The implementation correctly validates all input fields against the defined domain schema before storage.',
+            fail_criteria: 'The implementation allows arbitrary fields or unvalidated data to be persisted in the session store.',
+            evidence_pattern: 'Look for Zod parse or manual validation checks in the setObservations method.',
+            escalation_question: 'Can we craft a payload that injects malicious keys into the session store via unvalidated input?',
           }
         ],
       });
 
       expect(subResult.status).toBe('rejected');
-      expect(subResult.reason).toBe('UNKNOWN_MAIN_QUESTION');
+      expect(subResult.reason).toBe('QUESTION_NOT_FOUND');
     });
   });
 });

@@ -33,8 +33,17 @@ const QUESTIONNAIRE_DIR = '.questionnaire';
 const COLLAB_SESSIONS_SUBDIR = 'collaborative-sessions';
 
 // Global registry: maps sessionId -> repoPath so sessions survive server restarts
+let REGISTRY_PATH = join(homedir(), '.questionnaire', 'collab-session-registry.json');
+
+/**
+ * Set a custom registry path (used for tests)
+ */
+export function setRegistryPath(path: string): void {
+  REGISTRY_PATH = path;
+}
+
 function getGlobalRegistryPath(): string {
-  return join(homedir(), '.questionnaire', 'collab-session-registry.json');
+  return REGISTRY_PATH;
 }
 
 function loadGlobalRegistry(): Record<string, string> {
@@ -114,8 +123,10 @@ export class CollaborativeSessionStore {
 
   /**
    * Load collaborative sessions from a specific repo
+   * @param repoPath Path to the repository
+   * @param force Whether to overwrite in-memory cache with disk data
    */
-  private loadSessionsFromRepo(repoPath: string): void {
+  private loadSessionsFromRepo(repoPath: string, force: boolean = false): void {
     const sessionsDir = getRepoCollabSessionsDir(repoPath);
     if (!existsSync(sessionsDir)) {
       return; // No sessions yet for this repo
@@ -127,19 +138,28 @@ export class CollaborativeSessionStore {
         if (file.endsWith('.json')) {
           const sessionId = file.replace('.json', '');
           const sessionPath = join(sessionsDir, file);
+          
+          // Skip if already in memory and not forcing reload
+          if (!force && this.sessions.has(sessionId)) {
+            continue;
+          }
+
           try {
             const data = readFileSync(sessionPath, 'utf-8');
             const session = JSON.parse(data) as CollaborativeSession;
-
-            // Don't overwrite if already in memory
-            if (this.sessions.has(sessionId)) {
-              continue;
-            }
-
+            
             // Revive Date objects from JSON
             session.created_at = new Date(session.created_at);
             session.updated_at = new Date(session.updated_at);
             
+            // Fix: Map serialization issues. JSON.parse makes it a regular object.
+            // If it's an object but should be a Map, we need to convert it.
+            if (session.investigation_coverage && !(session.investigation_coverage instanceof Map)) {
+               session.investigation_coverage = new Map(Object.entries(session.investigation_coverage));
+            } else if (!session.investigation_coverage) {
+               session.investigation_coverage = new Map();
+            }
+
             // Track the repo path for this session
             this.repoPaths.set(sessionId, repoPath);
             this.sessions.set(sessionId, session);
@@ -302,6 +322,15 @@ export class CollaborativeSessionStore {
   }
 
   /**
+   * Clear in-memory state only (used for tests)
+   */
+  clearMemoryOnly(): void {
+    this.sessions.clear();
+    this.repoPaths.clear();
+    this.activeSessionId = null;
+  }
+
+  /**
    * Get a session by ID
    * @param sessionId Session ID
    * @param forceReload Whether to force a reload from disk
@@ -320,7 +349,7 @@ export class CollaborativeSessionStore {
     // If forceReload or not in cache, try to load from known repo path
     if (forceReload || !this.sessions.has(sessionId)) {
       if (repoPath) {
-        this.loadSessionsFromRepo(repoPath);
+        this.loadSessionsFromRepo(repoPath, forceReload);
       }
     }
 
@@ -725,7 +754,6 @@ export class CollaborativeSessionStore {
     };
 
     session.merged_questions.push(fullQuestion);
-    console.error(`[DEBUG] addMainQuestion: sessionId=${sessionId}, merged_questions.length=${session.merged_questions.length}`);
     session.question_pool.push({
       question: fullQuestion,
       agent_id: agentId,
