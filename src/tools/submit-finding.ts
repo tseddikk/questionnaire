@@ -59,7 +59,9 @@ export function submitFinding(input: SubmitFindingInput): FindingResponse {
   }
   
   // Build the finding object
-  const findingInput: Omit<Finding, 'id' | 'sub_question_id'> = {
+  const findingInput: Finding = {
+    id: '', // Will be assigned by store
+    sub_question_id: input.sub_question_id,
     answer: input.finding.answer,
     evidence: input.finding.evidence,
     verdict: input.finding.verdict,
@@ -68,10 +70,10 @@ export function submitFinding(input: SubmitFindingInput): FindingResponse {
     evidence_found: input.finding.evidence_found,
     escalation_finding: input.finding.escalation_finding,
   };
-  
+
   // Validate the finding
   try {
-    validateFindingForSubmission(findingInput as Finding);
+    validateFindingForSubmission(findingInput);
   } catch (error) {
     if (error instanceof Error) {
       return {
@@ -82,11 +84,10 @@ export function submitFinding(input: SubmitFindingInput): FindingResponse {
     }
     throw error;
   }
-  
+
   // Store the finding
   const finding = sessionStore.addFinding(
     session.session_id,
-    input.sub_question_id,
     findingInput
   );
   

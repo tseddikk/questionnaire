@@ -13,6 +13,7 @@ import type { CollaborativeSession } from '../types/domain.js';
 export interface JoinSessionInput {
   session_id: string;
   agent_id: string;
+  repo_path: string;
 }
 
 export interface JoinSessionResponse {
@@ -26,7 +27,7 @@ export interface JoinSessionResponse {
 }
 
 export function joinSession(input: JoinSessionInput): JoinSessionResponse {
-  const session = collaborativeStore.joinSession(input.session_id, input.agent_id);
+  const session = collaborativeStore.joinSession(input.session_id, input.agent_id, input.repo_path);
 
   return {
     status: 'joined',
@@ -58,7 +59,11 @@ export const joinSessionTool = {
         type: 'string' as const,
         description: 'Your agent identifier',
       },
+      repo_path: {
+        type: 'string' as const,
+        description: 'Absolute path to repository',
+      },
     },
-    required: ['session_id', 'agent_id'],
+    required: ['session_id', 'agent_id', 'repo_path'],
   },
 };

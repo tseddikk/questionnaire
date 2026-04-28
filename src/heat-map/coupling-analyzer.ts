@@ -7,8 +7,8 @@
  */
 
 import { readFileSync } from 'fs';
-import { globSync } from 'glob';
 import type { CouplingScore } from '../types/domain.js';
+import { getTrackedFiles } from './churn-analyzer.js';
 
 // ============================================================================
 // Import Pattern Detection
@@ -123,10 +123,10 @@ export function buildDependencyGraph(
   repoPath: string,
   maxFiles: number = 2000
 ): DependencyGraph {
-  const files = globSync('**/*.{ts,tsx,js,jsx,mjs,cjs,py}', {
-    cwd: repoPath,
-    absolute: false,
-  }).slice(0, maxFiles);
+  const SOURCE_EXTS = new Set(['ts', 'tsx', 'js', 'jsx', 'mjs', 'cjs', 'py']);
+  const files = getTrackedFiles(repoPath)
+    .filter(f => SOURCE_EXTS.has(f.split('.').pop()?.toLowerCase() ?? ''))
+    .slice(0, maxFiles);
 
   const inbound = new Map<string, Set<string>>();
   const outbound = new Map<string, Set<string>>();

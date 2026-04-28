@@ -99,8 +99,8 @@ async function handleToolCall(name: string, args: unknown): Promise<unknown> {
       // Collaborative tools
       case 'discover_sessions':
         return discoverSessions(args as { repo_path: string });
-      case 'join_session':
-        return joinSession(args as { session_id: string; agent_id: string });
+case 'join_session':
+      return joinSession(args as { session_id: string; agent_id: string; repo_path: string });
       case 'react_to_finding':
         return reactToFinding(args as { session_id: string; agent_id: string; finding_id: string; reaction_type: 'confirm' | 'challenge' | 'extend'; content: string; evidence?: { file_path: string; line_start: number; line_end: number; snippet: string } | null });
       case 'react_to_question':

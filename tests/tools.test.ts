@@ -2,7 +2,10 @@
  * MCP Tool Handler Tests
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { mkdtempSync, rmSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
 import { sessionStore } from '../src/state/session-store.js';
 import { initializeAudit } from '../src/tools/initialize-audit.js';
 import { submitObservations } from '../src/tools/submit-observations.js';
@@ -12,18 +15,26 @@ import type { InitializeAuditInput, SubmitObservationsInput } from '../src/types
 import type { SubmitQuestionInput } from '../src/types/schemas.js';
 
 describe('MCP Tools', () => {
+  // Simulates the user's project repo — a real writable directory
+  let repoPath: string;
+
   beforeEach(() => {
-    // Clear sessions before each test
+    repoPath = mkdtempSync(join(tmpdir(), 'questionnaire-test-repo-'));
+    // Clear singleton store between tests
     const sessions = sessionStore.getAllSessions();
     for (const session of sessions) {
       sessionStore.deleteSession(session.session_id);
     }
   });
 
+  afterEach(() => {
+    rmSync(repoPath, { recursive: true, force: true });
+  });
+
   describe('initialize_audit', () => {
     it('should create a new session and return instructions', async () => {
       const input: InitializeAuditInput = {
-        repo_path: '/test/repo',
+        repo_path: repoPath,
         domain: 'security',
         depth: 'standard',
       };
@@ -38,7 +49,7 @@ describe('MCP Tools', () => {
 
     it('should advance session to phase 1', async () => {
       const input: InitializeAuditInput = {
-        repo_path: '/test/repo',
+        repo_path: repoPath,
         domain: 'performance',
         depth: 'deep',
       };
@@ -56,7 +67,7 @@ describe('MCP Tools', () => {
     it('should accept valid observations and advance to phase 2', async () => {
       // Initialize first
       const initResult = await initializeAudit({
-        repo_path: '/test/repo',
+        repo_path: repoPath,
         domain: 'security',
         depth: 'standard',
       });
@@ -89,7 +100,7 @@ describe('MCP Tools', () => {
 
     it('should reject observations without file citations', async () => {
       const initResult = await initializeAudit({
-        repo_path: '/test/repo',
+        repo_path: repoPath,
         domain: 'security',
         depth: 'standard',
       });
@@ -116,7 +127,7 @@ describe('MCP Tools', () => {
 
     it('should throw PhaseViolationError when called in wrong phase', async () => {
       const initResult = await initializeAudit({
-        repo_path: '/test/repo',
+        repo_path: repoPath,
         domain: 'security',
         depth: 'standard',
       });
@@ -153,7 +164,7 @@ describe('MCP Tools', () => {
     it('should accept valid main questions', async () => {
       // Initialize and submit observations
       const initResult = await initializeAudit({
-        repo_path: '/test/repo',
+        repo_path: repoPath,
         domain: 'security',
         depth: 'standard',
       });
@@ -194,7 +205,7 @@ describe('MCP Tools', () => {
     it('should reject binary questions', async () => {
       // Initialize and submit observations
       const initResult = await initializeAudit({
-        repo_path: '/test/repo',
+        repo_path: repoPath,
         domain: 'security',
         depth: 'standard',
       });

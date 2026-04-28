@@ -3,9 +3,12 @@
  *
  * Manages multi-agent sessions with agent identity tracking.
  * Enforces one active session rule.
- * Extension to base session store.
+ * Extension to base session store - now with persistence in user's project directory.
  */
 
+import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, unlinkSync } from 'fs';
+import { join } from 'path';
+import { homedir } from 'os';
 import { v4 as uuidv4 } from 'uuid';
 import type {
   CollaborativeSession,
@@ -16,15 +19,202 @@ import type {
   AuditDomain,
   AuditDepth,
 } from '../types/domain.js';
-import { SessionNotFoundError } from './errors.js';
+import { SessionNotFoundError, SessionExpiredError } from './errors.js';
+
+// ============================================================================
+// Configuration
+// ============================================================================
+
+// Session TTL: 24 hours (in milliseconds)
+const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
+
+// Subdirectory within repo for storing collaborative sessions
+const QUESTIONNAIRE_DIR = '.questionnaire';
+const COLLAB_SESSIONS_SUBDIR = 'collaborative-sessions';
+
+// Global registry: maps sessionId -> repoPath so sessions survive server restarts
+function getGlobalRegistryPath(): string {
+  return join(homedir(), '.questionnaire', 'collab-session-registry.json');
+}
+
+function loadGlobalRegistry(): Record<string, string> {
+  const registryPath = getGlobalRegistryPath();
+  if (!existsSync(registryPath)) return {};
+  try {
+    return JSON.parse(readFileSync(registryPath, 'utf-8')) as Record<string, string>;
+  } catch {
+    return {};
+  }
+}
+
+function saveToGlobalRegistry(sessionId: string, repoPath: string): void {
+  const registryPath = getGlobalRegistryPath();
+  const registryDir = join(homedir(), '.questionnaire');
+  if (!existsSync(registryDir)) {
+    mkdirSync(registryDir, { recursive: true });
+  }
+  const registry = loadGlobalRegistry();
+  registry[sessionId] = repoPath;
+  try {
+    writeFileSync(registryPath, JSON.stringify(registry, null, 2), 'utf-8');
+  } catch (e) {
+    console.error(`Failed to update global collab session registry:`, e);
+  }
+}
+
+function removeFromGlobalRegistry(sessionId: string): void {
+  const registryPath = getGlobalRegistryPath();
+  if (!existsSync(registryPath)) return;
+  const registry = loadGlobalRegistry();
+  delete registry[sessionId];
+  try {
+    writeFileSync(registryPath, JSON.stringify(registry, null, 2), 'utf-8');
+  } catch (e) {
+    console.error(`Failed to update global collab session registry:`, e);
+  }
+}
+
+// ============================================================================
+// Helper Functions
+// ============================================================================
+
+/**
+ * Get the collaborative sessions directory for a repo
+ */
+function getRepoCollabSessionsDir(repoPath: string): string {
+  return join(repoPath, QUESTIONNAIRE_DIR, COLLAB_SESSIONS_SUBDIR);
+}
 
 // ============================================================================
 // Store Implementation
 // ============================================================================
 
 export class CollaborativeSessionStore {
+  private repoPaths: Map<string, string> = new Map(); // sessionId -> repoPath mapping
   private sessions: Map<string, CollaborativeSession> = new Map();
   private activeSessionId: string | null = null;
+
+  /**
+   * Get session file path within a repo
+   */
+  private getSessionPath(sessionId: string, repoPath: string): string {
+    const sessionsDir = getRepoCollabSessionsDir(repoPath);
+    return join(sessionsDir, `${sessionId}.json`);
+  }
+
+  /**
+   * Ensure the sessions directory exists for a repo
+   */
+  private ensureSessionsDir(repoPath: string): void {
+    const sessionsDir = getRepoCollabSessionsDir(repoPath);
+    if (!existsSync(sessionsDir)) {
+      mkdirSync(sessionsDir, { recursive: true });
+    }
+  }
+
+  /**
+   * Load collaborative sessions from a specific repo
+   */
+  private loadSessionsFromRepo(repoPath: string): void {
+    const sessionsDir = getRepoCollabSessionsDir(repoPath);
+    if (!existsSync(sessionsDir)) {
+      return; // No sessions yet for this repo
+    }
+
+    try {
+      const files = readdirSync(sessionsDir);
+      for (const file of files) {
+        if (file.endsWith('.json')) {
+          const sessionId = file.replace('.json', '');
+          const sessionPath = join(sessionsDir, file);
+          try {
+            const data = readFileSync(sessionPath, 'utf-8');
+            const session = JSON.parse(data) as CollaborativeSession;
+            // Revive Date objects from JSON
+            session.created_at = new Date(session.created_at);
+            session.updated_at = new Date(session.updated_at);
+            // Set active session if this one is not archived
+            if (session.session_state !== 'archived' && session.session_state !== 'archived_incomplete') {
+              this.activeSessionId = sessionId;
+            }
+            // Track the repo path for this session
+            this.repoPaths.set(sessionId, repoPath);
+            this.sessions.set(sessionId, session);
+          } catch (e) {
+            // Invalid session file, skip
+            console.error(`Failed to load collaborative session ${sessionId} from ${repoPath}:`, e);
+          }
+        }
+      }
+    } catch (e) {
+      console.error(`Failed to load collaborative sessions from ${repoPath}:`, e);
+    }
+  }
+
+  /**
+   * Save session to disk
+   */
+  private saveSession(session: CollaborativeSession): void {
+    const repoPath = this.repoPaths.get(session.session_id);
+    if (!repoPath) {
+      console.error(`No repo path known for collaborative session ${session.session_id}`);
+      return;
+    }
+
+    const sessionPath = this.getSessionPath(session.session_id, repoPath);
+    try {
+      writeFileSync(sessionPath, JSON.stringify(session, null, 2), 'utf-8');
+    } catch (e) {
+      console.error(`Failed to save collaborative session ${session.session_id}:`, e);
+    }
+  }
+
+  /**
+   * Check if session has expired
+   */
+  private isSessionExpired(session: CollaborativeSession): boolean {
+    const now = Date.now();
+    const lastActivity = session.updated_at.getTime();
+    return (now - lastActivity) > SESSION_TTL_MS;
+  }
+
+  /**
+   * Clean up expired sessions for a repo
+   */
+  private cleanupExpiredSessionsForRepo(repoPath: string): void {
+    const sessionsDir = getRepoCollabSessionsDir(repoPath);
+    if (!existsSync(sessionsDir)) return;
+
+    const expired: string[] = [];
+
+    for (const [sessionId, session] of this.sessions.entries()) {
+      const sessionRepoPath = this.repoPaths.get(sessionId);
+      if (sessionRepoPath === repoPath && this.isSessionExpired(session)) {
+        expired.push(sessionId);
+      }
+    }
+
+    for (const sessionId of expired) {
+      this.sessions.delete(sessionId);
+      this.repoPaths.delete(sessionId);
+      removeFromGlobalRegistry(sessionId);
+      if (this.activeSessionId === sessionId) {
+        this.activeSessionId = null;
+      }
+      try {
+        const sessionPath = join(sessionsDir, `${sessionId}.json`);
+        if (existsSync(sessionPath)) {
+          unlinkSync(sessionPath);
+        }
+      } catch (e) {
+        console.error(`Failed to delete expired collaborative session ${sessionId}:`, e);
+      }
+    }
+
+    if (expired.length > 0) {
+      console.log(`Cleaned up ${expired.length} expired collaborative sessions from ${repoPath}`);
+    }
+  }
 
   /**
    * Create a new collaborative session
@@ -37,11 +227,21 @@ export class CollaborativeSessionStore {
     creatorAgentId: AgentId,
     synthesizer: AgentId | null = null
   ): CollaborativeSession {
+    // Ensure sessions directory exists
+    this.ensureSessionsDir(repoPath);
+
+    // Load any existing sessions for this repo (to avoid ID collisions)
+    this.loadSessionsFromRepo(repoPath);
+    this.cleanupExpiredSessionsForRepo(repoPath);
+
     // Check one active session rule
     if (this.activeSessionId) {
       const active = this.sessions.get(this.activeSessionId);
       if (active && active.session_state !== 'archived' && active.session_state !== 'archived_incomplete') {
-        throw new Error(`SESSION_ALREADY_ACTIVE: Session ${this.activeSessionId} is active`);
+        // Check if it's expired
+        if (!this.isSessionExpired(active)) {
+          throw new Error(`SESSION_ALREADY_ACTIVE: Session ${this.activeSessionId} is active`);
+        }
       }
     }
 
@@ -57,46 +257,41 @@ export class CollaborativeSessionStore {
       phase: 0,
       created_at: now,
       updated_at: now,
-
-      // Agent management
       agents: [{
         agent_id: creatorAgentId,
-        joined_at: now,
         role: synthesizer === creatorAgentId ? 'synthesizer' : 'investigator',
+        joined_at: now,
       }],
       synthesizer,
-
-      // Data
+      // Data accumulation
       observation_sets: [],
       heat_map: null,
-
-      // Phase 2
+      // Phase 2: Question generation
       question_pool: [],
       question_reactions: [],
       merged_questions: [],
-
-      // Phase 3
+      // Phase 3: Sub-questions
       sub_question_pool: [],
       outlier_sub_questions: [],
-
-      // Phase 4
+      // Phase 4: Investigation
       findings: [],
       finding_reactions: [],
       investigation_coverage: new Map(),
       agent_checkpoints: [],
-
-      // Phase 5
+      // Phase 5: Synthesis
       contested_findings: [],
       adjudications: [],
       unresolved_findings: [],
-
       // Report
       report: null,
     };
 
+    // Track repo path for this session
+    this.repoPaths.set(sessionId, repoPath);
     this.sessions.set(sessionId, session);
     this.activeSessionId = sessionId;
-
+    saveToGlobalRegistry(sessionId, repoPath);
+    this.saveSession(session);
     return session;
   }
 
@@ -104,10 +299,49 @@ export class CollaborativeSessionStore {
    * Get a session by ID
    */
   getSession(sessionId: string): CollaborativeSession {
-    const session = this.sessions.get(sessionId);
+    // Check cache first
+    let session = this.sessions.get(sessionId);
+    let repoPath = this.repoPaths.get(sessionId);
+
+    // If not in memory, consult the global registry to find the repo path
+    if (!session && !repoPath) {
+      const registry = loadGlobalRegistry();
+      repoPath = registry[sessionId];
+      if (repoPath) {
+        this.repoPaths.set(sessionId, repoPath);
+      }
+    }
+
+    // If not in cache, try to load from known repo path
+    if (!session && repoPath) {
+      this.loadSessionsFromRepo(repoPath);
+      session = this.sessions.get(sessionId);
+    }
+
     if (!session) {
       throw new SessionNotFoundError(sessionId, 'collaborative_store');
     }
+
+    // Check if session has expired
+    if (this.isSessionExpired(session)) {
+      this.sessions.delete(sessionId);
+      this.repoPaths.delete(sessionId);
+      if (this.activeSessionId === sessionId) {
+        this.activeSessionId = null;
+      }
+      try {
+        if (repoPath) {
+          const sessionPath = this.getSessionPath(sessionId, repoPath);
+          if (existsSync(sessionPath)) {
+            unlinkSync(sessionPath);
+          }
+        }
+      } catch (e) {
+        // Ignore delete errors
+      }
+      throw new SessionExpiredError(sessionId, 'collaborative_store');
+    }
+
     return session;
   }
 
@@ -115,13 +349,25 @@ export class CollaborativeSessionStore {
    * Check if a session exists
    */
   hasSession(sessionId: string): boolean {
-    return this.sessions.has(sessionId);
+    try {
+      this.getSession(sessionId);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   /**
    * Get active session ID
    */
   getActiveSessionId(): string | null {
+    // Check if active session is expired
+    if (this.activeSessionId) {
+      const active = this.sessions.get(this.activeSessionId);
+      if (!active || this.isSessionExpired(active)) {
+        this.activeSessionId = null;
+      }
+    }
     return this.activeSessionId;
   }
 
@@ -129,174 +375,176 @@ export class CollaborativeSessionStore {
    * Discover active sessions for a repo
    */
   discoverSessions(repoPath: string): CollaborativeSession[] {
-    return Array.from(this.sessions.values()).filter(
-      s => s.repo_path === repoPath && 
-           s.session_state !== 'archived' && 
-           s.session_state !== 'archived_incomplete'
-    );
+    this.loadSessionsFromRepo(repoPath);
+    this.cleanupExpiredSessionsForRepo(repoPath);
+
+    const valid: CollaborativeSession[] = [];
+    for (const [sessionId, session] of this.sessions.entries()) {
+      const sessionRepoPath = this.repoPaths.get(sessionId);
+      if (sessionRepoPath === repoPath && !this.isSessionExpired(session)) {
+        valid.push(session);
+      }
+    }
+    return valid;
   }
 
   /**
-   * Add agent to session
+   * Join an existing session
    */
-  joinSession(sessionId: string, agentId: AgentId): CollaborativeSession {
+  joinSession(
+    sessionId: string,
+    agentId: AgentId,
+    repoPath: string
+  ): CollaborativeSession {
     const session = this.getSession(sessionId);
 
-    // Check if agent already joined
-    if (session.agents.some(a => a.agent_id === agentId)) {
-      return session;
+    // Verify repo matches
+    if (session.repo_path !== repoPath) {
+      throw new Error(`REPO_MISMATCH: Session ${sessionId} is for ${session.repo_path}, not ${repoPath}`);
     }
 
-    // Check session state
-    if (['pending_synthesis', 'adjudicating', 'finalized', 'archived'].includes(session.session_state)) {
+    // Check session state allows joining
+    if (session.session_state === 'finalized' || 
+        session.session_state === 'archived' ||
+        session.session_state === 'archived_incomplete') {
       throw new Error(`Cannot join session in state: ${session.session_state}`);
     }
 
-    // Check repo path match
-    // (This would need the agent's current working directory)
+    // Check if agent is already in session
+    const existingAgent = session.agents.find(a => a.agent_id === agentId);
+    if (!existingAgent) {
+      session.agents.push({
+        agent_id: agentId,
+        role: session.synthesizer === agentId ? 'synthesizer' : 'investigator',
+        joined_at: new Date(),
+      });
+      session.updated_at = new Date();
+      this.saveSession(session);
+    }
 
-    session.agents.push({
-      agent_id: agentId,
-      joined_at: new Date(),
-      role: 'investigator',
-    });
-
-    session.updated_at = new Date();
     return session;
   }
 
   /**
-   * Designate synthesizer
+   * Designate synthesizer for a session
    */
-  designateSynthesizer(sessionId: string, agentId: AgentId): CollaborativeSession {
+  designateSynthesizer(sessionId: string, agentId: AgentId): void {
     const session = this.getSession(sessionId);
-
-    // Verify agent is in session
-    const agent = session.agents.find(a => a.agent_id === agentId);
-    if (!agent) {
-      throw new Error(`Agent ${agentId} is not in session`);
-    }
-
-    // Update role
-    agent.role = 'synthesizer';
     session.synthesizer = agentId;
-
-    // Update other agents to investigator
-    for (const a of session.agents) {
-      if (a.agent_id !== agentId) {
-        a.role = 'investigator';
-      }
+    
+    // Update role of the designated agent
+    const agent = session.agents.find(a => a.agent_id === agentId);
+    if (agent) {
+      agent.role = 'synthesizer';
     }
-
+    
     session.updated_at = new Date();
-    return session;
+    this.saveSession(session);
   }
 
   /**
-   * Add finding with agent attribution
+   * Merge findings from an agent into the collaborative session
    */
-  addFinding(sessionId: string, finding: AgentFinding): CollaborativeSession {
+  mergeFinding(
+    sessionId: string,
+    agentFinding: AgentFinding
+  ): void {
     const session = this.getSession(sessionId);
-    session.findings.push(finding);
-
-    // Update investigation coverage
-    const coverage = session.investigation_coverage.get(finding.sub_question_id) || {
-      sub_question_id: finding.sub_question_id,
-      status: 'single_agent',
-      agents_investigated: [],
-      finding_ids: [],
-      reactions: [],
-    };
-
-    if (!coverage.agents_investigated.includes(finding.agent_id)) {
-      coverage.agents_investigated.push(finding.agent_id);
-    }
-    coverage.finding_ids.push(finding.finding_id);
-    coverage.status = coverage.agents_investigated.length >= 2 ? 'confirmed' : 'single_agent';
-
-    session.investigation_coverage.set(finding.sub_question_id, coverage);
+    session.findings.push(agentFinding);
     session.updated_at = new Date();
-
-    return session;
+    this.saveSession(session);
   }
 
   /**
-   * Add finding reaction
+   * Add a reaction to a finding
    */
-  addFindingReaction(sessionId: string, reaction: FindingReaction): CollaborativeSession {
+  addReaction(
+    sessionId: string,
+    reaction: FindingReaction
+  ): void {
     const session = this.getSession(sessionId);
     session.finding_reactions.push(reaction);
-
-    // Update coverage status
-    const finding = session.findings.find(f => f.finding_id === reaction.finding_id);
-    if (finding) {
-      const coverage = session.investigation_coverage.get(finding.sub_question_id);
-      if (coverage) {
-        coverage.reactions.push(reaction.id);
-
-        if (reaction.reaction_type === 'challenge') {
-          coverage.status = 'contested';
-          if (!session.contested_findings.includes(reaction.finding_id)) {
-            session.contested_findings.push(reaction.finding_id);
-          }
-        }
-      }
-    }
-
     session.updated_at = new Date();
-    return session;
+    this.saveSession(session);
   }
 
   /**
-   * Add adjudication
+   * Alias for addReaction (used by react-to-finding tool)
    */
-  addAdjudication(sessionId: string, adjudication: AdjudicationRecord): CollaborativeSession {
+  addFindingReaction(
+    sessionId: string,
+    reaction: FindingReaction
+  ): void {
+    return this.addReaction(sessionId, reaction);
+  }
+
+  /**
+   * Add adjudication for contested findings
+   */
+  addAdjudication(
+    sessionId: string,
+    adjudication: AdjudicationRecord
+  ): void {
     const session = this.getSession(sessionId);
     session.adjudications.push(adjudication);
-
-    // Remove from contested if resolved
-    const idx = session.contested_findings.indexOf(adjudication.finding_id);
-    if (idx !== -1) {
-      session.contested_findings.splice(idx, 1);
-    }
-
-    // Update coverage status
-    const finding = session.findings.find(f => f.finding_id === adjudication.finding_id);
-    if (finding) {
-      const coverage = session.investigation_coverage.get(finding.sub_question_id);
-      if (coverage) {
-        coverage.status = 'resolved';
-      }
-    }
-
     session.updated_at = new Date();
-    return session;
+    this.saveSession(session);
   }
 
   /**
-   * Archive session
+   * Get session summary
    */
-  archiveSession(sessionId: string, _reason: string): CollaborativeSession {
+  getSessionSummary(sessionId: string): {
+    session_id: string;
+    repo_path: string;
+    domain: string;
+    depth: string;
+    phase: number;
+    session_state: string;
+    agent_count: number;
+    investigators: string[];
+    synthesizer: string | null;
+    questions_merged: number;
+    findings_submitted: number;
+    reactions_count: number;
+    adjudications_count: number;
+  } {
     const session = this.getSession(sessionId);
-    session.session_state = session.report ? 'archived' : 'archived_incomplete';
-    session.updated_at = new Date();
 
-    // Clear active session if this was it
-    if (this.activeSessionId === sessionId) {
-      this.activeSessionId = null;
-    }
-
-    return session;
+    return {
+      session_id: session.session_id,
+      repo_path: session.repo_path,
+      domain: session.domain,
+      depth: session.depth,
+      phase: session.phase,
+      session_state: session.session_state,
+      agent_count: session.agents.length,
+      investigators: session.agents
+        .filter(a => a.role === 'investigator')
+        .map(a => a.agent_id),
+      synthesizer: session.synthesizer,
+      questions_merged: session.merged_questions.length,
+      findings_submitted: session.findings.length,
+      reactions_count: session.finding_reactions.length,
+      adjudications_count: session.adjudications.length,
+    };
   }
 
   /**
-   * Get investigator stats
+   * Get investigator statistics
    */
-  getInvestigatorStats(sessionId: string): { agent_id: AgentId; findings_submitted: number; confirmations_given: number; challenges_given: number; confirmation_rate: number }[] {
+  getInvestigatorStats(sessionId: string): Array<{
+    agent_id: string;
+    findings_submitted: number;
+    confirmations_given: number;
+    challenges_given: number;
+    confirmation_rate: number;
+  }> {
     const session = this.getSession(sessionId);
-    const stats = new Map<AgentId, { findings: number; confirmations: number; challenges: number }>();
+    const stats = new Map<string, { findings: number; confirmations: number; challenges: number }>();
 
-    for (const agent of session.agents) {
+    // Initialize stats for all investigators
+    for (const agent of session.agents.filter(a => a.role === 'investigator')) {
       stats.set(agent.agent_id, { findings: 0, confirmations: 0, challenges: 0 });
     }
 
@@ -322,6 +570,23 @@ export class CollaborativeSessionStore {
       challenges_given: s.challenges,
       confirmation_rate: s.findings > 0 ? s.confirmations / s.findings : 0,
     }));
+  }
+
+  /**
+   * Archive a session
+   */
+  archiveSession(sessionId: string, _reason: string): CollaborativeSession {
+    const session = this.getSession(sessionId);
+    session.session_state = 'archived_incomplete';
+    session.updated_at = new Date();
+    
+    // Clear active session if this was it
+    if (this.activeSessionId === sessionId) {
+      this.activeSessionId = null;
+    }
+    
+    this.saveSession(session);
+    return session;
   }
 }
 

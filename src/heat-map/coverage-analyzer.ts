@@ -8,8 +8,8 @@
  */
 
 import { existsSync, readFileSync } from 'fs';
-import { globSync } from 'glob';
 import { dirname, basename } from 'path';
+import { getTrackedFiles } from './churn-analyzer.js';
 import type { CoverageGapScore } from '../types/domain.js';
 
 // ============================================================================
@@ -108,32 +108,27 @@ export function parseCobertura(repoPath: string): Map<string, number> {
 // Test File Detection
 // ============================================================================
 
-const TEST_FILE_PATTERNS = [
-  '**/*.test.{ts,tsx,js,jsx}',
-  '**/*.spec.{ts,tsx,js,jsx}',
-  '**/__tests__/*.{ts,tsx,js,jsx}',
-  '**/tests/**/*.{ts,tsx,js,jsx}',
-  '**/test/**/*.{ts,tsx,js,jsx}',
-];
-
-const PY_TEST_PATTERNS = [
-  '**/test_*.py',
-  '**/*_test.py',
-  '**/tests/**/*.py',
-];
 
 /**
  * Get all test files in repository
  */
 export function getTestFiles(repoPath: string): Set<string> {
+  const TEST_SUFFIXES = [
+    '.test.ts', '.test.tsx', '.test.js', '.test.jsx',
+    '.spec.ts', '.spec.tsx', '.spec.js', '.spec.jsx',
+  ];
   const testFiles = new Set<string>();
 
-  const patterns = [...TEST_FILE_PATTERNS, ...PY_TEST_PATTERNS];
-  for (const pattern of patterns) {
-    const matches = globSync(pattern, { cwd: repoPath, absolute: false });
-    for (const match of matches) {
-      testFiles.add(match);
-    }
+  for (const file of getTrackedFiles(repoPath)) {
+    const isTest =
+      TEST_SUFFIXES.some(s => file.endsWith(s)) ||
+      file.includes('/__tests__/') ||
+      file.includes('/tests/') ||
+      file.includes('/test/') ||
+      /\/test_[^/]+\.py$/.test(file) ||
+      /_test\.py$/.test(file);
+
+    if (isTest) testFiles.add(file);
   }
 
   return testFiles;
@@ -174,21 +169,17 @@ export function hasCorrespondingTestFile(
  */
 export function detectLanguages(repoPath: string): string[] {
   const languages: string[] = [];
+  const tracked = getTrackedFiles(repoPath);
 
   if (existsSync(`${repoPath}/package.json`)) {
     languages.push('javascript');
-    if (globSync('**/*.ts', { cwd: repoPath, absolute: false }).length > 0) {
+    if (tracked.some(f => f.endsWith('.ts') || f.endsWith('.tsx'))) {
       languages.push('typescript');
     }
   }
 
-  if (globSync('**/*.py', { cwd: repoPath, absolute: false }).length > 0) {
-    languages.push('python');
-  }
-
-  if (globSync('**/*.go', { cwd: repoPath, absolute: false }).length > 0) {
-    languages.push('go');
-  }
+  if (tracked.some(f => f.endsWith('.py'))) languages.push('python');
+  if (tracked.some(f => f.endsWith('.go'))) languages.push('go');
 
   return languages;
 }
@@ -280,18 +271,18 @@ export function analyzeCoverage(
   const testFiles = getTestFiles(repoPath);
   const languages = detectLanguages(repoPath);
 
-  // Get all source files
-  const extensions =
+  // Get all source files from git (respects .gitignore)
+  const SOURCE_EXTS = new Set(
     languages.includes('typescript') || languages.includes('javascript')
-      ? '{ts,tsx,js,jsx,mjs,cjs}'
+      ? ['ts', 'tsx', 'js', 'jsx', 'mjs', 'cjs']
       : languages.includes('python')
-        ? 'py'
-        : '*';
+        ? ['py']
+        : ['ts', 'tsx', 'js', 'jsx', 'mjs', 'cjs', 'py', 'go']
+  );
 
-  const sourceFiles = globSync(`**/*.${extensions}`, {
-    cwd: repoPath,
-    absolute: false,
-  }).slice(0, maxFiles);
+  const sourceFiles = getTrackedFiles(repoPath)
+    .filter(f => SOURCE_EXTS.has(f.split('.').pop()?.toLowerCase() ?? ''))
+    .slice(0, maxFiles);
 
   return sourceFiles.map(file =>
     computeCoverageGapScore(file, coverageData, testFiles)
