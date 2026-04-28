@@ -8,7 +8,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { existsSync, rmSync } from 'fs';
 import { join } from 'path';
-import { sessionStore } from '../src/state/session-store.js';
+import { collaborativeStore } from '../src/state/collaborative-store.js';
 import { initializeAudit } from '../src/tools/initialize-audit.js';
 import { submitObservations } from '../src/tools/submit-observations.js';
 import { submitQuestion } from '../src/tools/submit-question.js';
@@ -50,9 +50,9 @@ describe('Complete Protocol Flow', () => {
 
   beforeEach(() => {
     // Clean up any existing sessions from memory
-    const sessions = sessionStore.getAllSessions();
+    const sessions = collaborativeStore.getAllSessions();
     for (const session of sessions) {
-      sessionStore.deleteSession(session.session_id);
+      collaborativeStore.deleteSession(session.session_id);
     }
   });
 
@@ -84,13 +84,13 @@ describe('Complete Protocol Flow', () => {
       expect(result.status).toBe('ready');
       expect(result.instructions).toContain('SECURITY AUDIT INSTRUCTIONS');
       
-      const session = sessionStore.getSession(result.session_id);
+      const session = collaborativeStore.getSession(result.session_id);
       expect(session.phase).toBe(1);
       expect(session.domain).toBe('security');
       expect(session.depth).toBe('standard');
       
       // Clean up
-      sessionStore.deleteSession(result.session_id);
+      collaborativeStore.deleteSession(result.session_id);
     });
 
     it('should generate heat map during initialization', async () => {
@@ -101,12 +101,12 @@ describe('Complete Protocol Flow', () => {
       };
 
       const result = await initializeAudit(input);
-      const session = sessionStore.getSession(result.session_id);
+      const session = collaborativeStore.getSession(result.session_id);
 
       expect(session.heat_map).toBeDefined();
       
       // Clean up
-      sessionStore.deleteSession(result.session_id);
+      collaborativeStore.deleteSession(result.session_id);
     });
   });
 
@@ -161,12 +161,12 @@ describe('Complete Protocol Flow', () => {
       expect(result.status).toBe('accepted');
       expect(result.phase_unlocked).toBe(2);
 
-      const session = sessionStore.getSession(initResult.session_id);
+      const session = collaborativeStore.getSession(initResult.session_id);
       expect(session.phase).toBe(2);
       expect(session.observations).toBeDefined();
       
       // Clean up
-      sessionStore.deleteSession(initResult.session_id);
+      collaborativeStore.deleteSession(initResult.session_id);
     });
 
     it('should reject observations without file citations', async () => {
@@ -197,7 +197,7 @@ describe('Complete Protocol Flow', () => {
       }).toThrow('Missing file citation');
       
       // Clean up
-      sessionStore.deleteSession(initResult.session_id);
+      collaborativeStore.deleteSession(initResult.session_id);
     });
   });
 
@@ -246,12 +246,12 @@ describe('Complete Protocol Flow', () => {
         questionIds.push(result.question_id!);
       }
 
-      const session = sessionStore.getSession(initResult.session_id);
+      const session = collaborativeStore.getSession(initResult.session_id);
       expect(session.phase).toBe(3); // Should have advanced
       expect(session.main_questions.length).toBe(5);
       
       // Clean up
-      sessionStore.deleteSession(initResult.session_id);
+      collaborativeStore.deleteSession(initResult.session_id);
     });
 
     it('should reject binary questions', async () => {
@@ -294,7 +294,7 @@ describe('Complete Protocol Flow', () => {
       expect(result.failures?.some(f => f.code === 'BINARY_QUESTION')).toBe(true);
       
       // Clean up
-      sessionStore.deleteSession(initResult.session_id);
+      collaborativeStore.deleteSession(initResult.session_id);
     });
 
     it('should reject questions without target files', async () => {
@@ -336,7 +336,7 @@ describe('Complete Protocol Flow', () => {
       expect(result.failures?.some(f => f.code === 'MISSING_TARGET_FILES')).toBe(true);
       
       // Clean up
-      sessionStore.deleteSession(initResult.session_id);
+      collaborativeStore.deleteSession(initResult.session_id);
     });
   });
 
@@ -381,7 +381,7 @@ describe('Complete Protocol Flow', () => {
         questionIds.push(qResult.question_id);
       }
 
-      expect(sessionStore.getSession(initResult.session_id).phase).toBe(3);
+      expect(collaborativeStore.getSession(initResult.session_id).phase).toBe(3);
 
       // Phase 3 - Submit sub-questions for ALL 5 main questions
       for (const qId of questionIds) {
@@ -397,7 +397,7 @@ describe('Complete Protocol Flow', () => {
       }
 
       // Phase 4 should be unlocked NOW
-      const session = sessionStore.getSession(initResult.session_id);
+      const session = collaborativeStore.getSession(initResult.session_id);
       expect(session.phase).toBe(4);
       
       // Verify all main questions have sub_question_ids
@@ -406,7 +406,7 @@ describe('Complete Protocol Flow', () => {
       }
       
       // Clean up
-      sessionStore.deleteSession(initResult.session_id);
+      collaborativeStore.deleteSession(initResult.session_id);
     });
 
     it('should NOT advance to Phase 4 until ALL main questions have sub-questions', async () => {
@@ -459,7 +459,7 @@ describe('Complete Protocol Flow', () => {
       }
 
       // Phase should still be 3 (not 4)
-      const session = sessionStore.getSession(initResult.session_id);
+      const session = collaborativeStore.getSession(initResult.session_id);
       expect(session.phase).toBe(3);
 
       // Now submit the last one
@@ -470,10 +470,10 @@ describe('Complete Protocol Flow', () => {
       });
 
       // NOW Phase 4 should be unlocked
-      expect(sessionStore.getSession(initResult.session_id).phase).toBe(4);
+      expect(collaborativeStore.getSession(initResult.session_id).phase).toBe(4);
       
       // Clean up
-      sessionStore.deleteSession(initResult.session_id);
+      collaborativeStore.deleteSession(initResult.session_id);
     });
 
     it('should return sub_question_ids when accepted', async () => {
@@ -524,7 +524,7 @@ describe('Complete Protocol Flow', () => {
       expect(Array.isArray(subResult.sub_question_ids)).toBe(true);
       
       // Clean up
-      sessionStore.deleteSession(initResult.session_id);
+      collaborativeStore.deleteSession(initResult.session_id);
     });
   });
 
@@ -586,7 +586,7 @@ describe('Complete Protocol Flow', () => {
     it('should accept findings for sub-questions', async () => {
       const { sessionId, subQuestionIds } = await setupPhase4();
 
-      expect(sessionStore.getSession(sessionId).phase).toBe(4);
+      expect(collaborativeStore.getSession(sessionId).phase).toBe(4);
 
       // Submit a finding for the first sub-question
       const findingInput: SubmitFindingInput = {
@@ -612,11 +612,11 @@ describe('Complete Protocol Flow', () => {
       expect(result.status).toBe('accepted');
       expect(result.finding_id).toBeDefined();
 
-      const session = sessionStore.getSession(sessionId);
+      const session = collaborativeStore.getSession(sessionId);
       expect(session.findings.length).toBe(1);
       
       // Clean up
-      sessionStore.deleteSession(sessionId);
+      collaborativeStore.deleteSession(sessionId);
     });
 
     it('should require escalation_finding for FAIL verdicts', async () => {
@@ -646,7 +646,7 @@ describe('Complete Protocol Flow', () => {
       expect(result.reason).toBe('ESCALATION_REQUIRED');
       
       // Clean up
-      sessionStore.deleteSession(sessionId);
+      collaborativeStore.deleteSession(sessionId);
     });
 
     it('should require escalation_finding for SUSPICIOUS verdicts', async () => {
@@ -676,7 +676,7 @@ describe('Complete Protocol Flow', () => {
       expect(result.reason).toBe('ESCALATION_REQUIRED');
       
       // Clean up
-      sessionStore.deleteSession(sessionId);
+      collaborativeStore.deleteSession(sessionId);
     });
 
     it('should checkpoint a main question after all its sub-questions have findings', async () => {
@@ -708,7 +708,7 @@ describe('Complete Protocol Flow', () => {
       }
 
       // Get the main question ID
-      const session = sessionStore.getSession(sessionId);
+      const session = collaborativeStore.getSession(sessionId);
       const firstMainQuestionId = session.main_questions[0].id;
 
       // Checkpoint should work now
@@ -720,7 +720,7 @@ describe('Complete Protocol Flow', () => {
       expect(checkpointResult.status).toBe('checkpoint_accepted');
       
       // Clean up
-      sessionStore.deleteSession(sessionId);
+      collaborativeStore.deleteSession(sessionId);
     });
   });
 
@@ -739,7 +739,7 @@ describe('Complete Protocol Flow', () => {
       expect(existsSync(sessionDir)).toBe(true);
       
       // Clean up
-      sessionStore.deleteSession(initResult.session_id);
+      collaborativeStore.deleteSession(initResult.session_id);
       try {
         rmSync(repoPath, { recursive: true, force: true });
       } catch {
@@ -756,12 +756,12 @@ describe('Complete Protocol Flow', () => {
         depth: 'deep',
       });
 
-      const discovered = sessionStore.discoverSessions(repoPath);
+      const discovered = collaborativeStore.discoverSessions(repoPath);
       expect(discovered.length).toBeGreaterThan(0);
       expect(discovered[0].session_id).toBe(initResult.session_id);
 
       // Clean up
-      sessionStore.deleteSession(initResult.session_id);
+      collaborativeStore.deleteSession(initResult.session_id);
       try {
         rmSync(repoPath, { recursive: true, force: true });
       } catch {
