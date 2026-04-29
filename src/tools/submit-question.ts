@@ -30,10 +30,6 @@ export function submitQuestion(input: SubmitQuestionInput): QuestionResponse | E
 
   // Get session
   const session = collaborativeStore.getSession(input.session_id);
-  if (!session) {
-    // This will be handled by session store, but we ensure proper error format
-    throw new Error(`Session not found: ${input.session_id}`);
-  }
 
   // Validate phase
   if (session.phase !== 2) {
@@ -41,7 +37,7 @@ export function submitQuestion(input: SubmitQuestionInput): QuestionResponse | E
       toolName,
       session.phase,
       2,
-      session as any
+      session
     );
   }
 
@@ -100,11 +96,14 @@ export function submitQuestion(input: SubmitQuestionInput): QuestionResponse | E
  * Check if Phase 2 is complete (min questions reached)
  */
 export function isPhase2Complete(sessionId: string): boolean {
-  const session = collaborativeStore.getSession(sessionId);
-  if (!session) {return false;}
-  const config = DEPTH_CONFIG[session.depth];
-  const count = collaborativeStore.getMainQuestionCount(sessionId);
-  return count >= config.min_main_questions;
+  try {
+    const session = collaborativeStore.getSession(sessionId);
+    const config = DEPTH_CONFIG[session.depth];
+    const count = collaborativeStore.getMainQuestionCount(sessionId);
+    return count >= config.min_main_questions;
+  } catch {
+    return false;
+  }
 }
 
 /**
