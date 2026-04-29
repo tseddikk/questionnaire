@@ -1,10 +1,10 @@
-# Critical Questionnaire MCP Server
+# Questionnaire MCP Server
 
 A Model Context Protocol (MCP) server that orchestrates forensic-depth codebase audits through a structured 6-phase protocol.
 
 ## Overview
 
-The Critical Questionnaire MCP is a **procedural constraint engine** that enforces how AI agents conduct codebase audits. It ensures investigations follow the rigor of a "paranoid senior engineer" through structured phases, validation rules, and evidence requirements. All analytical intelligence resides in the agent; the server ensures that intelligence is applied with discipline and consistency.
+The Questionnaire MCP is a **procedural constraint engine** that enforces how AI agents conduct codebase audits. It ensures investigations follow the rigor of a "paranoid senior engineer" through structured phases, validation rules, and evidence requirements. All analytical intelligence resides in the agent; the server ensures that intelligence is applied with discipline and consistency.
 
 ## Key Features
 
