@@ -26,7 +26,7 @@ export function getFileCommitHistory(
     const sinceStr = since.toISOString().split('T')[0];
 
     const output = execSync(
-      `git log --follow --since="${sinceStr}" --format="%H|%ai|%ae" -- "${filePath}"`,
+      `git log --follow --since="${sinceStr}" --format="%H|%ai|%ae" -- "${filePath}" 2>/dev/null`,
       { cwd: repoPath, encoding: 'utf-8', maxBuffer: 10 * 1024 * 1024 }
     );
 
@@ -104,7 +104,7 @@ export function computeChurnScore(
  */
 export function getTrackedFiles(repoPath: string): string[] {
   try {
-    const output = execSync('git ls-files', {
+    const output = execSync('git ls-files 2>/dev/null', {
       cwd: repoPath,
       encoding: 'utf-8',
       maxBuffer: 50 * 1024 * 1024,
