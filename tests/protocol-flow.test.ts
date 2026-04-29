@@ -6,9 +6,9 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { existsSync, rmSync } from 'fs';
+import { existsSync, rmSync, mkdirSync } from 'fs';
 import { join } from 'path';
-import { collaborativeStore } from '../src/state/collaborative-store.js';
+import { collaborativeStore, setRegistryPath } from '../src/state/collaborative-store.js';
 import { initializeAudit } from '../src/tools/initialize-audit.js';
 import { submitObservations } from '../src/tools/submit-observations.js';
 import { submitQuestion } from '../src/tools/submit-question.js';
@@ -42,13 +42,24 @@ function createValidSubQuestions(count: number): Array<{
 }
 
 describe('Complete Protocol Flow', () => {
+  const testRegistryDir = join(process.cwd(), 'tests', 'test-registry');
+  const testRegistryPath = join(testRegistryDir, 'collab-session-registry.json');
+  const createdRepos: string[] = [];
+
   // Use unique repo paths for each test to avoid conflicts
   let repoCounter = 0;
   function getTestRepo(): string {
-    return `/tmp/test-protocol-${Date.now()}-${repoCounter++}`;
+    const repoPath = `/tmp/test-protocol-${Date.now()}-${repoCounter++}`;
+    createdRepos.push(repoPath);
+    return repoPath;
   }
 
   beforeEach(() => {
+    if (!existsSync(testRegistryDir)) {
+      mkdirSync(testRegistryDir, { recursive: true });
+    }
+    setRegistryPath(testRegistryPath);
+
     // Clean up any existing sessions from memory
     const sessions = collaborativeStore.getAllSessions();
     for (const session of sessions) {
@@ -57,9 +68,15 @@ describe('Complete Protocol Flow', () => {
   });
 
   afterEach(() => {
+    if (existsSync(testRegistryPath)) {
+      try {
+        rmSync(testRegistryPath, { force: true });
+      } catch {
+        // Ignore
+      }
+    }
     // Clean up test directories
-    for (let i = 0; i < repoCounter; i++) {
-      const testDir = `/tmp/test-protocol-${Date.now()}-${i}`;
+    for (const testDir of createdRepos) {
       try {
         if (existsSync(testDir)) {
           rmSync(testDir, { recursive: true, force: true });
@@ -68,6 +85,7 @@ describe('Complete Protocol Flow', () => {
         // Ignore cleanup errors
       }
     }
+    createdRepos.length = 0;
   });
 
   describe('Phase 0: Initialize', () => {
@@ -373,8 +391,8 @@ describe('Complete Protocol Flow', () => {
           question: {
             text: `Question ${i}: Where is user input validated?`,
             target_files: ['/src/session.ts'],
-            suspicion_rationale: `Rationale ${i}`,
-            edge_case_targeted: `Edge ${i}`,
+            suspicion_rationale: `The module ${i} has async operations without clear rollback mechanisms.`,
+            edge_case_targeted: 'Partial writes during network interruption',
             domain_pattern: 'VALIDATION_BYPASS',
           },
         }) as any;
@@ -441,8 +459,8 @@ describe('Complete Protocol Flow', () => {
           question: {
             text: `Question ${i}: Where is user input validated?`,
             target_files: ['/src/session.ts'],
-            suspicion_rationale: `Rationale ${i}`,
-            edge_case_targeted: `Edge ${i}`,
+            suspicion_rationale: `The module ${i} has async operations without clear rollback mechanisms.`,
+            edge_case_targeted: 'Partial writes during network interruption',
             domain_pattern: 'VALIDATION_BYPASS',
           },
         }) as any;
@@ -499,19 +517,22 @@ describe('Complete Protocol Flow', () => {
         },
       });
 
-      // Submit one question
-      const qResult = submitQuestion({
-        session_id: initResult.session_id,
-        question: {
-          text: 'Where is user input validated?',
-          target_files: ['/src/session.ts'],
-          suspicion_rationale: 'Rationale',
-          edge_case_targeted: 'Edge',
-          domain_pattern: 'VALIDATION_BYPASS',
-        },
-      }) as any;
+      // Submit 5 questions to unlock Phase 3
+      let qResult: any;
+      for (let i = 1; i <= 5; i++) {
+        qResult = submitQuestion({
+          session_id: initResult.session_id,
+          question: {
+            text: `Question ${i}: Where is user input validated?`,
+            target_files: ['/src/session.ts'],
+            suspicion_rationale: 'The session store does not handle write errors correctly.',
+            edge_case_targeted: 'Disk full during session save',
+            domain_pattern: 'VALIDATION_BYPASS',
+          },
+        }) as any;
+      }
 
-      // Submit sub-questions
+      // Submit sub-questions for the last main question
       const subResult = submitSubQuestions({
         session_id: initResult.session_id,
         main_question_id: qResult.question_id,
@@ -561,8 +582,8 @@ describe('Complete Protocol Flow', () => {
           question: {
             text: `Question ${i}: Where is user input validated?`,
             target_files: ['/src/session.ts'],
-            suspicion_rationale: `Rationale ${i}`,
-            edge_case_targeted: `Edge ${i}`,
+            suspicion_rationale: `The module ${i} has async operations without clear rollback mechanisms.`,
+            edge_case_targeted: 'Partial writes during network interruption',
             domain_pattern: 'VALIDATION_BYPASS',
           },
         }) as any;
@@ -735,7 +756,7 @@ describe('Complete Protocol Flow', () => {
       });
 
       // Session should be persisted
-      const sessionDir = join(repoPath, '.questionnaire', 'audit-sessions');
+      const sessionDir = join(repoPath, '.questionnaire', 'collaborative-sessions');
       expect(existsSync(sessionDir)).toBe(true);
       
       // Clean up

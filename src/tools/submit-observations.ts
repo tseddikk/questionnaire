@@ -36,7 +36,7 @@ export function submitObservations(
       'submit_observations',
       session.phase,
       1,
-      session as any
+      session
     );
   }
   
@@ -52,7 +52,7 @@ export function submitObservations(
   const updatedSession = collaborativeStore.getSession(session.session_id, true);
 
   // Generate Phase 2 prompt
-  const prompt = generatePhase2Prompt(updatedSession as any);
+  const prompt = generatePhase2Prompt(updatedSession);
   
   return {
     status: 'accepted',

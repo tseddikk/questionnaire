@@ -78,14 +78,17 @@ export function submitSubQuestions(
     input.sub_questions as any[]
   );
 
+  // Get latest state
+  const updatedSession = collaborativeStore.getSession(session.session_id, true);
+
   // Check if all main questions have sub-questions
-  const allHaveSubQuestions = session.merged_questions.every(mq =>
+  const allHaveSubQuestions = updatedSession.merged_questions.every(mq =>
     mq.sub_question_ids.length > 0
   );
 
   // If all have sub-questions, advance to Phase 4
   if (allHaveSubQuestions) {
-    collaborativeStore.advancePhase(session.session_id, 4);
+    collaborativeStore.advancePhase(updatedSession.session_id, 4);
   }
 
   return {
@@ -100,7 +103,7 @@ export function submitSubQuestions(
  */
 export function getRemainingMainQuestions(sessionId: string): string[] {
   const session = collaborativeStore.getSession(sessionId);
-  if (!session) return [];
+  if (!session) {return [];}
   return session.merged_questions
     .filter(mq => mq.sub_question_ids.length === 0)
     .map(mq => mq.id);

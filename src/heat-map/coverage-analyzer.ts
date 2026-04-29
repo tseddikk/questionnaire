@@ -52,7 +52,9 @@ export function parseLcov(repoPath: string): Map<string, number> {
         const [, hitsStr] = line.slice(3).split(',');
         const hits = parseInt(hitsStr || '0', 10);
         foundLines++;
-        if (hits > 0) hitLines++;
+        if (hits > 0) {
+          hitLines++;
+        }
       }
     }
 
@@ -79,7 +81,9 @@ export function parseCobertura(repoPath: string): Map<string, number> {
   ];
 
   for (const xmlPath of xmlPaths) {
-    if (!existsSync(xmlPath)) continue;
+    if (!existsSync(xmlPath)) {
+      continue;
+    }
 
     try {
       const content = readFileSync(xmlPath, 'utf-8');
@@ -128,7 +132,9 @@ export function getTestFiles(repoPath: string): Set<string> {
       /\/test_[^/]+\.py$/.test(file) ||
       /_test\.py$/.test(file);
 
-    if (isTest) testFiles.add(file);
+    if (isTest) {
+      testFiles.add(file);
+    }
   }
 
   return testFiles;
@@ -178,8 +184,12 @@ export function detectLanguages(repoPath: string): string[] {
     }
   }
 
-  if (tracked.some(f => f.endsWith('.py'))) languages.push('python');
-  if (tracked.some(f => f.endsWith('.go'))) languages.push('go');
+  if (tracked.some(f => f.endsWith('.py'))) {
+    languages.push('python');
+  }
+  if (tracked.some(f => f.endsWith('.go'))) {
+    languages.push('go');
+  }
 
   return languages;
 }

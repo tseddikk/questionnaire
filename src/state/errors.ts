@@ -10,7 +10,7 @@
  * - action: Concrete recovery instruction
  */
 
-import type { RejectionReason, AuditPhase, AuditSession, CollaborativeSession } from '../types/domain.js';
+import type { RejectionReason, AuditPhase, AuditSession, CollaborativeSession, MainQuestion } from '../types/domain.js';
 
 // ============================================================================
 // Error Response Types
@@ -315,13 +315,16 @@ function buildSessionStateContext(
   };
 
   if (sessionState) {
-    const mainQuestions = (sessionState as any).main_questions || (sessionState as any).merged_questions || [];
+    const mainQuestions: MainQuestion[] = 
+      ('main_questions' in sessionState ? sessionState.main_questions : []) || 
+      ('merged_questions' in sessionState ? sessionState.merged_questions : []) || 
+      [];
 
     context.main_questions_accepted = mainQuestions.length;
 
     // Count how many main questions have sub-questions submitted (not individual sub-question count)
     const mainQuestionsWithSubQuestions = mainQuestions.filter(
-      (mq: any) => mq.sub_question_ids && mq.sub_question_ids.length > 0
+      (mq) => mq.sub_question_ids && mq.sub_question_ids.length > 0
     ).length;
 
     context.sub_question_sets_submitted = mainQuestionsWithSubQuestions;

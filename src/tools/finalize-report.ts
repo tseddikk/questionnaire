@@ -15,7 +15,9 @@ import type {
   FindingSummary, 
   CrossCuttingConcern,
   Finding,
-  CheckpointRecord 
+  AgentFinding,
+  CheckpointRecord,
+  AgentCheckpoint
 } from '../types/domain.js';
 
 // ============================================================================
@@ -25,7 +27,7 @@ import type {
 /**
  * Generate findings summary
  */
-function generateFindingSummary(findings: Finding[]): FindingSummary {
+function generateFindingSummary(findings: (Finding | AgentFinding)[]): FindingSummary {
   const total = findings.length;
   
   const byVerdict = {
@@ -60,25 +62,28 @@ function generateFindingSummary(findings: Finding[]): FindingSummary {
  * Generate cross-cutting concerns from signals
  */
 function generateCrossCuttingConcerns(
-  checkpoints: CheckpointRecord[]
+  checkpoints: (CheckpointRecord | AgentCheckpoint)[]
 ): CrossCuttingConcern[] {
   const concerns: CrossCuttingConcern[] = [];
   const patternCounts = new Map<string, { count: number; affected: string[] }>();
   
   // Aggregate signals across all checkpoints
   for (const checkpoint of checkpoints) {
-    for (const signal of checkpoint.cross_cutting_signals) {
-      const existing = patternCounts.get(signal.pattern);
-      if (existing) {
-        existing.count += signal.affected_count;
-        if (!existing.affected.includes(checkpoint.main_question_id)) {
-          existing.affected.push(checkpoint.main_question_id);
+    // Only CheckpointRecord has cross_cutting_signals
+    if ('cross_cutting_signals' in checkpoint) {
+      for (const signal of checkpoint.cross_cutting_signals) {
+        const existing = patternCounts.get(signal.pattern);
+        if (existing) {
+          existing.count += signal.affected_count;
+          if (!existing.affected.includes(checkpoint.main_question_id)) {
+            existing.affected.push(checkpoint.main_question_id);
+          }
+        } else {
+          patternCounts.set(signal.pattern, {
+            count: signal.affected_count,
+            affected: [checkpoint.main_question_id],
+          });
         }
-      } else {
-        patternCounts.set(signal.pattern, {
-          count: signal.affected_count,
-          affected: [checkpoint.main_question_id],
-        });
       }
     }
   }
@@ -216,7 +221,7 @@ export function finalizeReport(input: FinalizeReportInput): FinalizeResponse {
       'finalize_report',
       session.phase,
       4,
-      session as any
+      session
     );
   }
 
@@ -232,7 +237,7 @@ export function finalizeReport(input: FinalizeReportInput): FinalizeResponse {
   }
 
   // Check if all main questions are checkpointed
-  const remaining = collaborativeStore.getRemainingMainQuestions(session.session_id);
+  const remaining = collaborativeStore.getUncheckpointedMainQuestions(session.session_id);
   if (remaining.length > 0) {
     return {
       status: 'report_authorized',
@@ -259,7 +264,7 @@ export function finalizeReport(input: FinalizeReportInput): FinalizeResponse {
 
   // Generate report data
   const findingsSummary = generateFindingSummary(session.findings);
-  const crossCuttingConcerns = generateCrossCuttingConcerns(session.agent_checkpoints as any);
+  const crossCuttingConcerns = generateCrossCuttingConcerns(session.agent_checkpoints);
 
   // Calculate heat map alignment if heat map exists
   let heatMapAlignment = null;

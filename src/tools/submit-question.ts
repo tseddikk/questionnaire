@@ -101,7 +101,7 @@ export function submitQuestion(input: SubmitQuestionInput): QuestionResponse | E
  */
 export function isPhase2Complete(sessionId: string): boolean {
   const session = collaborativeStore.getSession(sessionId);
-  if (!session) return false;
+  if (!session) {return false;}
   const config = DEPTH_CONFIG[session.depth];
   const count = collaborativeStore.getMainQuestionCount(sessionId);
   return count >= config.min_main_questions;

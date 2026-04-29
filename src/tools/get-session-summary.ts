@@ -60,8 +60,8 @@ export function getSessionSummary(input: GetSessionSummaryInput): GetSessionSumm
 
     const coverage = session.investigation_coverage.get(finding.sub_question_id);
     if (coverage) {
-      if (coverage.status === 'confirmed') confirmed++;
-      else if (coverage.status === 'single_agent') singleAgent++;
+      if (coverage.status === 'confirmed') {confirmed++;}
+      else if (coverage.status === 'single_agent') {singleAgent++;}
     }
   }
 

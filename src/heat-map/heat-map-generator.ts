@@ -44,9 +44,15 @@ export function computeHeatScore(
  * Determine bucket from heat score
  */
 export function getHeatBucket(score: number): HeatBucket {
-  if (score >= 75) return 'critical';
-  if (score >= 50) return 'high';
-  if (score >= 25) return 'medium';
+  if (score >= 75) {
+    return 'critical';
+  }
+  if (score >= 50) {
+    return 'high';
+  }
+  if (score >= 25) {
+    return 'medium';
+  }
   return 'low';
 }
 
@@ -155,10 +161,18 @@ export async function generateHeatMap(
   const languages = new Set<string>();
   for (const entry of entries) {
     const ext = entry.file.split('.').pop()?.toLowerCase();
-    if (ext === 'ts' || ext === 'tsx') languages.add('typescript');
-    if (ext === 'js' || ext === 'jsx') languages.add('javascript');
-    if (ext === 'py') languages.add('python');
-    if (ext === 'go') languages.add('go');
+    if (ext === 'ts' || ext === 'tsx') {
+      languages.add('typescript');
+    }
+    if (ext === 'js' || ext === 'jsx') {
+      languages.add('javascript');
+    }
+    if (ext === 'py') {
+      languages.add('python');
+    }
+    if (ext === 'go') {
+      languages.add('go');
+    }
   }
 
   return {

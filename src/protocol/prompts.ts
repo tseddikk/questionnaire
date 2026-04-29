@@ -4,28 +4,51 @@
  * Generates dynamic prompts based on session state.
  */
 
-import type { AuditSession, CollaborativeSession } from '../types/domain.js';
+import type { AuditSession, CollaborativeSession, MainQuestion, SubQuestion, Finding, AgentFinding, CheckpointRecord, AgentCheckpoint } from '../types/domain.js';
 import { DEPTH_CONFIG } from '../types/domain.js';
 
 // ============================================================================
 // Helpers
 // ============================================================================
 
-function getObservations(session: any) {
-  if (session.observations !== undefined) return session.observations;
-  return session.observation_sets?.[0]?.observations || null;
+function getObservations(session: AuditSession | CollaborativeSession) {
+  if ('observations' in session && session.observations !== undefined && session.observations !== null) {
+    return session.observations;
+  }
+  if ('observation_sets' in session) {
+    return session.observation_sets?.[0]?.observations || null;
+  }
+  return null;
 }
 
-function getMainQuestions(session: any) {
-  return session.main_questions || session.merged_questions || [];
+function getMainQuestions(session: AuditSession | CollaborativeSession): MainQuestion[] {
+  if ('main_questions' in session) {
+    return session.main_questions || [];
+  }
+  if ('merged_questions' in session) {
+    return session.merged_questions || [];
+  }
+  return [];
 }
 
-function getSubQuestions(session: any) {
-  return session.sub_questions || session.sub_question_pool || [];
+function getSubQuestions(session: AuditSession | CollaborativeSession): SubQuestion[] {
+  if ('sub_questions' in session) {
+    return session.sub_questions || [];
+  }
+  if ('sub_question_pool' in session) {
+    return session.sub_question_pool || [];
+  }
+  return [];
 }
 
-function getCheckpoints(session: any) {
-  return session.checkpoints || session.agent_checkpoints || [];
+function getCheckpoints(session: AuditSession | CollaborativeSession): (CheckpointRecord | AgentCheckpoint)[] {
+  if ('checkpoints' in session) {
+    return session.checkpoints || [];
+  }
+  if ('agent_checkpoints' in session) {
+    return session.agent_checkpoints || [];
+  }
+  return [];
 }
 
 // ============================================================================
@@ -81,22 +104,22 @@ YOUR OBSERVATIONS SUMMARY
 Purpose: ${observations?.purpose || 'Not recorded'}
 
 Tech Stack (${observations?.tech_stack?.length || 0} items):
-${observations?.tech_stack?.map((s: any) => `  - ${s.name} ${s.version}`).join('\n') || '  None recorded'}
+${observations?.tech_stack?.map((s) => `  - ${s.name} ${s.version}`).join('\n') || '  None recorded'}
 
 Entry Points (${observations?.entry_points?.length || 0}):
-${observations?.entry_points?.map((e: any) => `  - ${e.type}: ${e.location}`).join('\n') || '  None recorded'}
+${observations?.entry_points?.map((e) => `  - ${e.type}: ${e.location}`).join('\n') || '  None recorded'}
 
 Data Flows (${observations?.data_flows?.length || 0}):
-${observations?.data_flows?.map((d: any) => `  - ${d.source} -> ${d.destination}`).join('\n') || '  None recorded'}
+${observations?.data_flows?.map((d) => `  - ${d.source} -> ${d.destination}`).join('\n') || '  None recorded'}
 
 Auth Mechanisms (${observations?.auth_mechanisms?.length || 0}):
-${observations?.auth_mechanisms?.map((a: any) => `  - ${a.mechanism}: ${a.location}`).join('\n') || '  None recorded'}
+${observations?.auth_mechanisms?.map((a) => `  - ${a.mechanism}: ${a.location}`).join('\n') || '  None recorded'}
 
 Error Patterns (${observations?.error_patterns?.length || 0}):
-${observations?.error_patterns?.map((e: any) => `  - ${e.pattern}`).join('\n') || '  None recorded'}
+${observations?.error_patterns?.map((e) => `  - ${e.pattern}`).join('\n') || '  None recorded'}
 
 Test Coverage Notes (${observations?.test_coverage?.length || 0}):
-${observations?.test_coverage?.map((t: any) => `  - ${t.component}: ${t.coverage}`).join('\n') || '  None recorded'}
+${observations?.test_coverage?.map((t) => `  - ${t.component}: ${t.coverage}`).join('\n') || '  None recorded'}
 
 --------------------------------------------------------------------------------
 QUESTION GENERATION GUIDANCE
@@ -135,7 +158,7 @@ export function generatePhase3Prompt(session: AuditSession | CollaborativeSessio
   const config = DEPTH_CONFIG[session.depth];
   const mainQuestions = getMainQuestions(session);
   const pendingQuestions = mainQuestions.filter(
-    (mq: any) => mq.sub_question_ids.length === 0
+    (mq) => mq.sub_question_ids.length === 0
   );
   
   let prompt = `
@@ -219,17 +242,18 @@ WORK ETHIC:
   const mainQuestions = getMainQuestions(session);
   const allSubQuestions = getSubQuestions(session);
   const checkpoints = getCheckpoints(session);
+  const findings = (session.findings || []) as (Finding | AgentFinding)[];
   
   for (const mq of mainQuestions) {
     const subQuestions = allSubQuestions.filter(
-      (sq: any) => sq.main_question_id === mq.id
+      (sq) => sq.main_question_id === mq.id
     );
     const answeredCount = subQuestions.filter(
-      (sq: any) => session.findings.some((f: any) => f.sub_question_id === sq.id)
+      (sq) => findings.some((f) => f.sub_question_id === sq.id)
     ).length;
     
     const isCheckpointed = checkpoints.some(
-      (cp: any) => cp.main_question_id === mq.id
+      (cp) => cp.main_question_id === mq.id
     );
     
     prompt += `
@@ -244,8 +268,8 @@ MAIN QUESTION: ${mq.text}
       prompt += `Status: ${answeredCount}/${subQuestions.length} sub-questions answered\n`;
       
       for (const sq of subQuestions) {
-        const hasFinding = session.findings.some(
-          (f: any) => f.sub_question_id === sq.id
+        const hasFinding = findings.some(
+          (f) => f.sub_question_id === sq.id
         );
         
         prompt += `
@@ -279,22 +303,24 @@ MAIN QUESTION: ${mq.text}
 export function generatePhase5Prompt(session: AuditSession | CollaborativeSession): string {
   const mainQuestions = getMainQuestions(session);
   const subQuestions = getSubQuestions(session);
+  const findings = (session.findings || []) as (Finding | AgentFinding)[];
   const summary = {
     mainQuestions: mainQuestions.length,
     subQuestions: subQuestions.length,
-    findings: session.findings.length,
+    findings: findings.length,
     verdicts: {
-      PASS: session.findings.filter((f: any) => f.verdict === 'PASS').length,
-      FAIL: session.findings.filter((f: any) => f.verdict === 'FAIL').length,
-      SUSPICIOUS: session.findings.filter((f: any) => f.verdict === 'SUSPICIOUS').length,
-      UNCERTAIN: session.findings.filter((f: any) => f.verdict === 'UNCERTAIN').length,
+      PASS: findings.filter((f) => f.verdict === 'PASS').length,
+      FAIL: findings.filter((f) => f.verdict === 'FAIL').length,
+      SUSPICIOUS: findings.filter((f) => f.verdict === 'SUSPICIOUS').length,
+      UNCERTAIN: findings.filter((f) => f.verdict === 'UNCERTAIN').length,
     },
     severities: {
-      info: session.findings.filter((f: any) => f.severity === 'info').length,
-      warning: session.findings.filter((f: any) => f.severity === 'warning').length,
-      critical: session.findings.filter((f: any) => f.severity === 'critical').length,
-    catastrophic: session.findings.filter((f: any) => f.severity === 'catastrophic').length,
-  }};
+      info: findings.filter((f) => f.severity === 'info').length,
+      warning: findings.filter((f) => f.severity === 'warning').length,
+      critical: findings.filter((f) => f.severity === 'critical').length,
+      catastrophic: findings.filter((f) => f.severity === 'catastrophic').length,
+    }
+  };
 
 
   const prompt = `

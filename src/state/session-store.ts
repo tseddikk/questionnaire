@@ -42,7 +42,7 @@ function getGlobalRegistryPath(): string {
 
 function loadGlobalRegistry(): Record<string, string> {
   const registryPath = getGlobalRegistryPath();
-  if (!existsSync(registryPath)) return {};
+  if (!existsSync(registryPath)) {return {};}
   try {
     return JSON.parse(readFileSync(registryPath, 'utf-8')) as Record<string, string>;
   } catch {
@@ -67,7 +67,7 @@ function saveToGlobalRegistry(sessionId: string, repoPath: string): void {
 
 function removeFromGlobalRegistry(sessionId: string): void {
   const registryPath = getGlobalRegistryPath();
-  if (!existsSync(registryPath)) return;
+  if (!existsSync(registryPath)) {return;}
   const registry = loadGlobalRegistry();
   delete registry[sessionId];
   try {
@@ -181,7 +181,7 @@ export class PersistentSessionStore {
    */
   private cleanupExpiredSessionsForRepo(repoPath: string): void {
     const sessionsDir = getRepoSessionsDir(repoPath);
-    if (!existsSync(sessionsDir)) return;
+    if (!existsSync(sessionsDir)) {return;}
 
     const expired: string[] = [];
 

@@ -30,7 +30,7 @@ export function submitFinding(input: SubmitFindingInput): FindingResponse {
       'submit_finding',
       session.phase,
       4,
-      session as any
+      session
     );
   }
   

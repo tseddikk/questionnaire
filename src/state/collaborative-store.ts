@@ -18,6 +18,8 @@ import type {
   AdjudicationRecord,
   AuditDomain,
   AuditDepth,
+  MainQuestion,
+  SubQuestion,
 } from '../types/domain.js';
 import { SessionNotFoundError, SessionExpiredError } from './errors.js';
 
@@ -48,7 +50,9 @@ function getGlobalRegistryPath(): string {
 
 function loadGlobalRegistry(): Record<string, string> {
   const registryPath = getGlobalRegistryPath();
-  if (!existsSync(registryPath)) return {};
+  if (!existsSync(registryPath)) {
+    return {};
+  }
   try {
     return JSON.parse(readFileSync(registryPath, 'utf-8')) as Record<string, string>;
   } catch {
@@ -73,7 +77,9 @@ function saveToGlobalRegistry(sessionId: string, repoPath: string): void {
 
 function removeFromGlobalRegistry(sessionId: string): void {
   const registryPath = getGlobalRegistryPath();
-  if (!existsSync(registryPath)) return;
+  if (!existsSync(registryPath)) {
+    return;
+  }
   const registry = loadGlobalRegistry();
   delete registry[sessionId];
   try {
@@ -209,7 +215,9 @@ export class CollaborativeSessionStore {
    */
   private cleanupExpiredSessionsForRepo(repoPath: string): void {
     const sessionsDir = getRepoCollabSessionsDir(repoPath);
-    if (!existsSync(sessionsDir)) return;
+    if (!existsSync(sessionsDir)) {
+      return;
+    }
 
     const expired: string[] = [];
 
@@ -585,15 +593,21 @@ export class CollaborativeSessionStore {
     // Count findings
     for (const finding of session.findings) {
       const s = stats.get(finding.agent_id);
-      if (s) s.findings++;
+      if (s) {
+        s.findings++;
+      }
     }
 
     // Count reactions
     for (const reaction of session.finding_reactions) {
       const s = stats.get(reaction.agent_id);
       if (s) {
-        if (reaction.reaction_type === 'confirm') s.confirmations++;
-        if (reaction.reaction_type === 'challenge') s.challenges++;
+        if (reaction.reaction_type === 'confirm') {
+          s.confirmations++;
+        }
+        if (reaction.reaction_type === 'challenge') {
+          s.challenges++;
+        }
       }
     }
 
@@ -731,15 +745,15 @@ export class CollaborativeSessionStore {
   addMainQuestion(
     sessionId: string,
     agentId: string,
-    question: any
-  ): any {
+    question: Omit<MainQuestion, 'id' | 'sub_question_ids'>
+  ): MainQuestion {
     const session = this.getSession(sessionId, true);
 
     if (session.phase !== 2) {
       throw new Error(`Cannot add main questions in phase ${session.phase}`);
     }
 
-    const fullQuestion = {
+    const fullQuestion: MainQuestion = {
       ...question,
       id: uuidv4(),
       sub_question_ids: [],
@@ -760,23 +774,34 @@ export class CollaborativeSessionStore {
    * Get main question count
    */
   getMainQuestionCount(sessionId: string): number {
-    return this.getSession(sessionId, true).merged_questions.length;
+    const session = this.getSession(sessionId, true);
+    return session.merged_questions.length;
   }
 
   /**
    * Get a main question by ID
    */
-  getMainQuestion(sessionId: string, questionId: string): any | undefined {
+  getMainQuestion(sessionId: string, questionId: string): MainQuestion | undefined {
     const session = this.getSession(sessionId, true);
     return session.merged_questions.find(q => q.id === questionId);
   }
 
   /**
-   * Get remaining main questions (without sub-questions)
+   * Get remaining main questions (without sub-questions) - for Phase 3
    */
-  getRemainingMainQuestions(sessionId: string): any[] {
+  getRemainingMainQuestions(sessionId: string): MainQuestion[] {
     const session = this.getSession(sessionId, true);
     return session.merged_questions.filter(q => q.sub_question_ids.length === 0);
+  }
+
+  /**
+   * Get uncheckpointed main questions - for Phase 4
+   */
+  getUncheckpointedMainQuestions(sessionId: string): MainQuestion[] {
+    const session = this.getSession(sessionId, true);
+    return session.merged_questions.filter(q => 
+      !session.agent_checkpoints.some(cp => cp.main_question_id === q.id)
+    );
   }
 
   /**
@@ -785,8 +810,8 @@ export class CollaborativeSessionStore {
   addSubQuestions(
     sessionId: string,
     mainQuestionId: string,
-    subQuestions: any[]
-  ): any[] {
+    subQuestions: Omit<SubQuestion, 'id' | 'main_question_id'>[]
+  ): SubQuestion[] {
     const session = this.getSession(sessionId, true);
 
     if (session.phase !== 3) {
@@ -798,7 +823,7 @@ export class CollaborativeSessionStore {
       throw new Error(`Main question ${mainQuestionId} not found`);
     }
 
-    const createdSubQuestions = subQuestions.map(sq => ({
+    const createdSubQuestions: SubQuestion[] = subQuestions.map(sq => ({
       ...sq,
       id: uuidv4(),
       main_question_id: mainQuestionId,
@@ -814,7 +839,7 @@ export class CollaborativeSessionStore {
   /**
    * Get a sub-question by ID
    */
-  getSubQuestion(sessionId: string, subQuestionId: string): any | undefined {
+  getSubQuestion(sessionId: string, subQuestionId: string): SubQuestion | undefined {
     const session = this.getSession(sessionId, true);
     return session.sub_question_pool.find(sq => sq.id === subQuestionId);
   }
@@ -822,14 +847,14 @@ export class CollaborativeSessionStore {
   /**
    * Add a finding (Standard/Single-agent mode)
    */
-  addFinding(sessionId: string, agentId: string, finding: any): any {
+  addFinding(sessionId: string, agentId: string, finding: any): AgentFinding {
     const session = this.getSession(sessionId, true);
 
     if (session.phase !== 4 && session.phase !== 5) {
       throw new Error(`Cannot add findings in phase ${session.phase}`);
     }
 
-    const agentFinding = {
+    const agentFinding: AgentFinding = {
       ...finding,
       agent_id: agentId,
       finding_id: uuidv4(),
@@ -852,7 +877,7 @@ export class CollaborativeSessionStore {
   /**
    * Get findings for a main question
    */
-  getFindingsForMainQuestion(sessionId: string, mainQuestionId: string): any[] {
+  getFindingsForMainQuestion(sessionId: string, mainQuestionId: string): AgentFinding[] {
     const session = this.getSession(sessionId, true);
     const mainQuestion = session.merged_questions.find(q => q.id === mainQuestionId);
 
@@ -868,7 +893,7 @@ export class CollaborativeSessionStore {
   /**
    * Get all findings for a session
    */
-  getAllFindings(sessionId: string): any[] {
+  getAllFindings(sessionId: string): AgentFinding[] {
     return this.getSession(sessionId).findings;
   }
 
@@ -924,7 +949,13 @@ export class CollaborativeSessionStore {
   /**
    * Get session statistics
    */
-  getSessionStats(sessionId: string): any {
+  getSessionStats(sessionId: string): {
+    mainQuestions: number;
+    subQuestions: number;
+    findings: number;
+    checkpoints: number;
+    agents: number;
+  } {
     const session = this.getSession(sessionId);
 
     return {

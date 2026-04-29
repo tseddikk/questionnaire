@@ -36,7 +36,7 @@ export function getFileCommitHistory(
       .filter(line => line.length > 0)
       .map(line => {
         const [hash, dateStr, author] = line.split('|');
-        return { hash: hash!, date: new Date(dateStr!), author: author! };
+        return { hash, date: new Date(dateStr), author };
       });
   } catch {
     return [];
@@ -51,10 +51,18 @@ export function getRecencyWeight(commitDate: Date): number {
   const diffMs = now.getTime() - commitDate.getTime();
   const diffWeeks = diffMs / (7 * 24 * 60 * 60 * 1000);
 
-  if (diffWeeks <= 1) return 1.0;
-  if (diffWeeks <= 4) return 0.7;
-  if (diffWeeks <= 8) return 0.4;
-  if (diffWeeks <= 12) return 0.2;
+  if (diffWeeks <= 1) {
+    return 1.0;
+  }
+  if (diffWeeks <= 4) {
+    return 0.7;
+  }
+  if (diffWeeks <= 8) {
+    return 0.4;
+  }
+  if (diffWeeks <= 12) {
+    return 0.2;
+  }
   return 0.1;
 }
 
