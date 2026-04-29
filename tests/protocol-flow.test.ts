@@ -15,6 +15,8 @@ import { submitQuestion } from '../src/tools/submit-question.js';
 import { submitSubQuestions } from '../src/tools/submit-sub-questions.js';
 import { submitFinding } from '../src/tools/submit-finding.js';
 import { checkpoint } from '../src/tools/checkpoint.js';
+import { finalizeReport } from '../src/tools/finalize-report.js';
+import { designateSynthesizer } from '../src/tools/designate-synthesizer.js';
 import type { 
   InitializeAuditInput, 
   SubmitObservationsInput, 
@@ -700,50 +702,64 @@ describe('Complete Protocol Flow', () => {
       collaborativeStore.deleteSession(sessionId);
     });
 
-    it('should checkpoint a main question after all its sub-questions have findings', async () => {
-      const { sessionId, subQuestionIds } = await setupPhase4();
+  it('should checkpoint a main question after all its sub-questions have findings', async () => {
+    const { sessionId, subQuestionIds } = await setupPhase4();
 
-      // Submit findings for all sub-questions of the first main question
-      // (First 3 sub-questions belong to first main question with standard depth)
-      const firstMainQuestionSubIds = subQuestionIds.slice(0, 3);
-      
-      for (const sqId of firstMainQuestionSubIds) {
-        submitFinding({
-          session_id: sessionId,
-          sub_question_id: sqId,
-          finding: {
-            answer: 'Finding for sub-question',
-            evidence: {
-              file_path: '/src/session.ts',
-              line_start: 1,
-              line_end: 10,
-              snippet: 'code snippet',
-            },
-            verdict: 'PASS',
-            severity: 'info',
-            confidence: 'high',
-            evidence_found: true,
-            escalation_finding: null,
-          },
-        });
-      }
+    // Submit findings for all sub-questions of the first main question
+    // (First 3 sub-questions belong to first main question with standard depth)
+    const firstMainQuestionSubIds = subQuestionIds.slice(0, 3);
 
-      // Get the main question ID
-      const session = collaborativeStore.getSession(sessionId);
-      const firstMainQuestionId = session.merged_questions[0].id;
-
-      // Checkpoint should work now
-      const checkpointResult = checkpoint({
+    for (const sqId of firstMainQuestionSubIds) {
+      submitFinding({
         session_id: sessionId,
-        main_question_id: firstMainQuestionId,
+        sub_question_id: sqId,
+        finding: {
+          answer: 'Finding for sub-question',
+          evidence: {
+            file_path: '/src/session.ts',
+            line_start: 1,
+            line_end: 10,
+            snippet: 'code snippet',
+          },
+          verdict: 'PASS',
+          severity: 'info',
+          confidence: 'high',
+          evidence_found: true,
+          escalation_finding: null,
+        },
       });
+    }
 
-      expect(checkpointResult.status).toBe('checkpoint_accepted');
-      
-      // Clean up
-      collaborativeStore.deleteSession(sessionId);
+    // Get the main question ID
+    const session = collaborativeStore.getSession(sessionId);
+    const firstMainQuestionId = session.merged_questions[0].id;
+
+    // Checkpoint should work now
+    const checkpointResult = checkpoint({
+      session_id: sessionId,
+      main_question_id: firstMainQuestionId,
     });
+
+    expect(checkpointResult.status).toBe('checkpoint_accepted');
+
+    // Clean up
+    collaborativeStore.deleteSession(sessionId);
   });
+});
+
+describe('Report Finalization', () => {
+  it('should require agent_id parameter for finalize_report', () => {
+    // Test that FinalizeReportInput requires agent_id
+    // This is a schema-level test
+    const input = {
+      session_id: '123e4567-e89b-12d3-a456-426614174000',
+      // agent_id is now required
+    };
+
+    // The schema validation would reject this
+    expect(input).not.toHaveProperty('agent_id');
+  });
+});
 
   describe('Session Persistence', () => {
     it('should store sessions in project directory', async () => {

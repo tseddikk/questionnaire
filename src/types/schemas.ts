@@ -210,6 +210,7 @@ export const CheckpointInputSchema = z.object({
 
 export const FinalizeReportInputSchema = z.object({
   session_id: z.string().uuid(),
+  agent_id: z.string().min(1, 'Agent ID is required to verify synthesizer authorization'),
 });
 
 // ============================================================================

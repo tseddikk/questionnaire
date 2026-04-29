@@ -8,7 +8,7 @@
  */
 
 import { collaborativeStore } from '../state/collaborative-store.js';
-import { PhaseViolationError } from '../state/errors.js';
+import { PhaseViolationError, SynthesizerOnlyError } from '../state/errors.js';
 import type { FinalizeReportInput } from '../types/schemas.js';
 import type { 
   FinalizeResponse, 
@@ -234,6 +234,15 @@ export function finalizeReport(input: FinalizeReportInput): FinalizeResponse {
       failed_preconditions: preconditionFailures,
       guidance: 'All preconditions must be satisfied before finalizing.',
     } as unknown as FinalizeResponse;
+  }
+
+  // Validate synthesizer-only access - only the designated synthesizer can finalize
+  if (session.synthesizer !== input.agent_id) {
+    throw new SynthesizerOnlyError(
+      'finalize_report',
+      session.synthesizer,
+      input.agent_id
+    );
   }
 
   // Check if all main questions are checkpointed
