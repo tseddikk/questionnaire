@@ -217,7 +217,7 @@ function generateWorkflowGuide(): GetWorkflowGuideResponse {
     {
       tool: 'checkpoint',
       example: {
-        input: { session_id: 'uuid', main_question_id: 'uuid', agent_id: 'agent-0' },
+        input: { session_id: 'uuid', main_question_id: 'uuid', agent_id: 'investigator-1' },
         output: { status: 'checkpoint_accepted', questions_remaining: 4 },
       },
     },

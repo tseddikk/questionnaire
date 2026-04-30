@@ -86,7 +86,7 @@ export function submitFinding(input: SubmitFindingInput): FindingResponse {
   }
 
   // Store the finding
-  const agentId = 'agent-0';
+  const agentId = input.agent_id;
   const finding = collaborativeStore.addFinding(
     session.session_id,
     agentId,
@@ -187,6 +187,10 @@ export const submitFindingTool = {
         type: 'string',
         format: 'uuid',
         description: 'ID of the sub-question being answered',
+      },
+      agent_id: {
+        type: 'string',
+        description: 'Agent ID submitting the finding',
       },
       finding: {
         type: 'object',

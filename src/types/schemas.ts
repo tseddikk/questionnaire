@@ -147,6 +147,7 @@ export const ObservationLogSchema = z.object({
 
 export const SubmitObservationsInputSchema = z.object({
   session_id: z.string().uuid(),
+  agent_id: z.string().min(1, 'Agent ID is required'),
   observations: ObservationLogSchema,
 });
 
@@ -160,6 +161,7 @@ export const MainQuestionInputSchema = z.object({
 
 export const SubmitQuestionInputSchema = z.object({
   session_id: z.string().uuid(),
+  agent_id: z.string().min(1, 'Agent ID is required'),
   question: MainQuestionInputSchema,
 });
 
@@ -200,6 +202,7 @@ export const FindingInputSchema = z.object({
 export const SubmitFindingInputSchema = z.object({
   session_id: z.string().uuid(),
   sub_question_id: z.string().uuid(),
+  agent_id: z.string().min(1, 'Agent ID is required'),
   finding: FindingInputSchema,
 });
 

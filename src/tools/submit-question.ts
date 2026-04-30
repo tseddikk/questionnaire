@@ -69,7 +69,7 @@ export function submitQuestion(input: SubmitQuestionInput): QuestionResponse | E
   }
 
   // Store the question
-  const agentId = 'agent-0';
+  const agentId = input.agent_id;
   const question = collaborativeStore.addMainQuestion(
     session.session_id,
     agentId,
@@ -131,6 +131,10 @@ export const submitQuestionTool = {
         type: 'string',
         format: 'uuid',
         description: 'Session ID',
+      },
+      agent_id: {
+        type: 'string',
+        description: 'Agent ID submitting the question',
       },
       question: {
         type: 'object',

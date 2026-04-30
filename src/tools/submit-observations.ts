@@ -45,7 +45,7 @@ export function submitObservations(
   assertObservationsValid(validationResult);
   
   // Store observations and advance phase
-  const agentId = 'agent-0'; 
+  const agentId = input.agent_id;
   collaborativeStore.setObservations(session.session_id, agentId, input.observations);
   
   // Get latest state after advance
@@ -75,6 +75,10 @@ export const submitObservationsTool = {
         type: 'string',
         format: 'uuid',
         description: 'Session ID from initialize_audit',
+      },
+      agent_id: {
+        type: 'string',
+        description: 'Agent ID submitting observations',
       },
       observations: {
         type: 'object',
