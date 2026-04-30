@@ -62,7 +62,7 @@ function generateWorkflowGuide(): GetWorkflowGuideResponse {
       phase: 2,
       name: 'Generate Main Questions',
       description: 'Submit 5-7 main questions based on the domain pattern. Each question targets a specific failure pattern (e.g., VALIDATION_BYPASS, ASYNC_FAILURE).',
-      tools: ['submit_question'],
+      tools: ['submit_question', 'list_questions', 'react_to_question'],
       preconditions: ['Session in Phase 2', '5-7 questions required', 'Each question targets specific files with suspicion rationale'],
       expected_outcomes: [
         'Questions stored in merged_questions',
@@ -73,7 +73,7 @@ function generateWorkflowGuide(): GetWorkflowGuideResponse {
       phase: 3,
       name: 'Generate Sub-Questions',
       description: 'Decompose each main question into 3-6 sub-questions with pass/fail criteria, evidence patterns, and escalation questions.',
-      tools: ['submit_sub_questions'],
+      tools: ['submit_sub_questions', 'list_questions', 'list_sub_questions'],
       preconditions: ['Session in Phase 3', 'Main question ID required', 'Each sub-question needs pass_criteria, fail_criteria, evidence_pattern, escalation_question'],
       expected_outcomes: [
         'Sub-questions stored in sub_question_pool',
@@ -203,6 +203,11 @@ function generateWorkflowGuide(): GetWorkflowGuideResponse {
       mistake: 'Calling submit_finding in wrong phase',
       consequence: 'PhaseViolationError: Cannot add findings in phase X',
       correction: 'Ensure session is in Phase 4 before submitting findings',
+    },
+    {
+      mistake: 'Joining late and not using discovery tools',
+      consequence: 'Cannot see questions/sub-questions to contribute to existing work',
+      correction: 'Use list_questions, list_observations, list_sub_questions to discover existing work before submitting',
     },
   ];
 

@@ -31,6 +31,9 @@ import { designateSynthesizerTool, designateSynthesizer } from './tools/designat
 import { adjudicateFindingTool, adjudicateFinding } from './tools/adjudicate-finding.js';
 import { archiveSessionTool, archiveSession } from './tools/archive-session.js';
 import { getWorkflowGuideTool, getWorkflowGuide } from './tools/get-workflow-guide.js';
+import { listQuestionsTool, listQuestions } from './tools/list-questions.js';
+import { listObservationsTool, listObservations } from './tools/list-observations.js';
+import { listSubQuestionsTool, listSubQuestions } from './tools/list-sub-questions.js';
 
 import { AuditError } from './state/errors.js';
 import { ZodError } from 'zod';
@@ -64,6 +67,9 @@ const TOOLS = [
   archiveSessionTool,
   // Utility tools
   getWorkflowGuideTool,
+  listQuestionsTool,
+  listObservationsTool,
+  listSubQuestionsTool,
 ] as unknown as Tool[];
 
 // ============================================================================
@@ -119,6 +125,12 @@ case 'join_session':
         return archiveSession(args as { session_id: string; reason: string });
       case 'get_workflow_guide':
         return getWorkflowGuide();
+      case 'list_questions':
+        return listQuestions(args as { session_id: string });
+      case 'list_observations':
+        return listObservations(args as { session_id: string });
+      case 'list_sub_questions':
+        return listSubQuestions(args as { session_id: string; main_question_id: string });
 
       default:
         throw new Error(`Unknown tool: ${name}`);

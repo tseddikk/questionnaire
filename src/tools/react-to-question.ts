@@ -27,6 +27,14 @@ export interface ReactToQuestionResponse {
 export function reactToQuestion(input: ReactToQuestionInput): ReactToQuestionResponse {
   const session = collaborativeStore.getSession(input.session_id);
 
+  // Validate question exists
+  const questionExists = session.merged_questions.some(
+    q => q.main_question_id === input.question_id
+  );
+  if (!questionExists) {
+    throw new Error(`INVALID_QUESTION_ID: Question ${input.question_id} not found in session. Use list_questions to see valid IDs.`);
+  }
+
   const reaction: QuestionReaction = {
     id: uuidv4(),
     question_id: input.question_id,
