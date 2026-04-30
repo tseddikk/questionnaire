@@ -34,12 +34,16 @@ export function listQuestions(input: ListQuestionsInput): ListQuestionsResponse 
   const session = collaborativeStore.getSession(input.session_id);
 
   const questions: QuestionInfo[] = session.merged_questions.map(q => {
+    // Get agent_id from question_pool
+    const agentQuestion = session.question_pool.find(aq => aq.question.id === q.id);
+    const author_agent_id = agentQuestion?.agent_id || 'unknown';
+
     const subQuestions = session.sub_question_pool.filter(
-      sq => sq.main_question_id === q.main_question_id
+      sq => sq.main_question_id === q.id
     );
 
     const findings = session.findings.filter(
-      f => subQuestions.some(sq => sq.sub_question_id === f.sub_question_id)
+      f => subQuestions.some(sq => sq.id === f.sub_question_id)
     );
 
     let status: QuestionStatus;
@@ -54,9 +58,9 @@ export function listQuestions(input: ListQuestionsInput): ListQuestionsResponse 
     }
 
     return {
-      main_question_id: q.main_question_id,
+      main_question_id: q.id,
       text: q.text,
-      author_agent_id: q.agent_id,
+      author_agent_id,
       status,
       sub_questions_count: subQuestions.length,
       findings_count: findings.length,

@@ -38,12 +38,12 @@ export function listSubQuestions(input: ListSubQuestionsInput): ListSubQuestions
   const subQuestions = session.sub_question_pool
     .filter(sq => sq.main_question_id === input.main_question_id)
     .map(sq => {
-      const finding = session.findings.find(f => f.sub_question_id === sq.sub_question_id);
+      const finding = session.findings.find(f => f.sub_question_id === sq.id);
 
       return {
-        sub_question_id: sq.sub_question_id,
+        sub_question_id: sq.id,
         text: sq.text,
-        author_agent_id: sq.agent_id,
+        author_agent_id: 'unknown', // SubQuestion doesn't track author
         pass_criteria: sq.pass_criteria,
         fail_criteria: sq.fail_criteria,
         evidence_pattern: sq.evidence_pattern,

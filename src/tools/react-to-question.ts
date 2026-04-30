@@ -29,7 +29,7 @@ export function reactToQuestion(input: ReactToQuestionInput): ReactToQuestionRes
 
   // Validate question exists
   const questionExists = session.merged_questions.some(
-    q => q.main_question_id === input.question_id
+    q => q.id === input.question_id
   );
   if (!questionExists) {
     throw new Error(`INVALID_QUESTION_ID: Question ${input.question_id} not found in session. Use list_questions to see valid IDs.`);
