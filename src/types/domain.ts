@@ -137,6 +137,8 @@ export interface MainQuestion {
   edge_case_targeted: string;
   domain_pattern: QuestionPattern;
   sub_question_ids: string[];
+  author_agent_id: string;
+  created_at: Date;
 }
 
 export interface SubQuestion {
@@ -148,6 +150,8 @@ export interface SubQuestion {
   fail_criteria: string;
   evidence_pattern: string;
   escalation_question: string;
+  author_agent_id: string;
+  created_at: Date;
 }
 
 // ============================================================================
@@ -471,8 +475,8 @@ export interface InitializeResponse {
 
 export interface ObservationsResponse {
   status: 'accepted';
-  phase_unlocked: 2;
-  prompt: string;
+  current_phase: number;
+  observations_count: number;
 }
 
 export interface QuestionResponse {

@@ -175,11 +175,12 @@ describe('Complete Protocol Flow', () => {
 
       const result = submitObservations({
         session_id: initResult.session_id,
+        agent_id: 'test-agent',
         observations,
       });
 
       expect(result.status).toBe('accepted');
-      expect(result.phase_unlocked).toBe(2);
+      expect(result.current_phase).toBe(2);
 
       const session = collaborativeStore.getSession(initResult.session_id);
       expect(session.phase).toBe(2);

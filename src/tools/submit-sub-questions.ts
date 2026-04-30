@@ -8,7 +8,6 @@
  */
 
 import { collaborativeStore } from '../state/collaborative-store.js';
-import { PhaseViolationError } from '../state/errors.js';
 import { validateSubQuestions } from '../validation/question-validator.js';
 import type { SubmitSubQuestionsInput } from '../types/schemas.js';
 import type { SubQuestionsResponse } from '../types/domain.js';
@@ -25,16 +24,6 @@ export function submitSubQuestions(
 ): SubQuestionsResponse {
   // Get session
   const session = collaborativeStore.getSession(input.session_id);
-
-  // Validate phase
-  if (session.phase !== 3) {
-    throw new PhaseViolationError(
-      'submit_sub_questions',
-      session.phase,
-      3,
-      session as any
-    );
-  }
 
   // Verify main question exists
   const mainQuestion = collaborativeStore.getMainQuestion(
@@ -74,6 +63,7 @@ export function submitSubQuestions(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const createdSubQuestions = collaborativeStore.addSubQuestions(
     session.session_id,
+    input.agent_id,
     input.main_question_id,
     input.sub_questions as any[]
   );
@@ -123,6 +113,10 @@ export const submitSubQuestionsTool = {
         type: 'string',
         format: 'uuid',
         description: 'Session ID',
+      },
+      agent_id: {
+        type: 'string',
+        description: 'Agent ID submitting the sub-questions',
       },
       main_question_id: {
         type: 'string',

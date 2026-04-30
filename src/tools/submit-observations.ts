@@ -8,12 +8,10 @@
  */
 
 import { collaborativeStore } from '../state/collaborative-store.js';
-import { PhaseViolationError } from '../state/errors.js';
-import { 
-  validateObservations, 
-  assertObservationsValid 
+import {
+  validateObservations,
+  assertObservationsValid
 } from '../validation/observation-validator.js';
-import { generatePhase2Prompt } from '../protocol/prompts.js';
 import type { SubmitObservationsInput } from '../types/schemas.js';
 import type { ObservationsResponse } from '../types/domain.js';
 
@@ -29,35 +27,22 @@ export function submitObservations(
 ): ObservationsResponse {
   // Get session from collaborative store
   const session = collaborativeStore.getSession(input.session_id);
-  
-  // Validate phase
-  if (session.phase !== 1) {
-    throw new PhaseViolationError(
-      'submit_observations',
-      session.phase,
-      1,
-      session
-    );
-  }
-  
+
   // Validate observations have file citations
   const validationResult = validateObservations(input.observations);
   assertObservationsValid(validationResult);
-  
-  // Store observations and advance phase
+
+  // Store observations
   const agentId = input.agent_id;
   collaborativeStore.setObservations(session.session_id, agentId, input.observations);
-  
-  // Get latest state after advance
+
+  // Get latest state
   const updatedSession = collaborativeStore.getSession(session.session_id, true);
 
-  // Generate Phase 2 prompt
-  const prompt = generatePhase2Prompt(updatedSession);
-  
   return {
     status: 'accepted',
-    phase_unlocked: 2,
-    prompt,
+    current_phase: updatedSession.phase,
+    observations_count: updatedSession.observation_sets.length,
   };
 }
 

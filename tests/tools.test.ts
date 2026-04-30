@@ -95,11 +95,12 @@ describe('MCP Tools', () => {
 
       const result = submitObservations({
         session_id: initResult.session_id,
+        agent_id: 'test-agent',
         observations,
       });
 
       expect(result.status).toBe('accepted');
-      expect(result.phase_unlocked).toBe(2);
+      expect(result.current_phase).toBe(2);
     });
 
     it('should reject observations without file citations', async () => {
@@ -129,14 +130,14 @@ describe('MCP Tools', () => {
       }).toThrow('Missing file citation');
     });
 
-    it('should throw PhaseViolationError when called in wrong phase', async () => {
+    it('should allow multiple agents to submit observations (no phase gates)', async () => {
       const initResult = await initializeAudit({
         repo_path: repoPath,
+        agent_id: 'test-agent',
         domain: 'security',
         depth: 'standard',
       });
 
-      // First call to advance to phase 2
       const observations: SubmitObservationsInput['observations'] = {
         purpose: 'Test',
         tech_stack: [{ name: 'React', version: '18.0.0', file_path: '/package.json' }],
@@ -151,16 +152,18 @@ describe('MCP Tools', () => {
 
       submitObservations({
         session_id: initResult.session_id,
+        agent_id: 'test-agent',
         observations,
       });
 
-      // Now try again - should throw because phase is 2, not 1
-      expect(() => {
-        submitObservations({
-          session_id: initResult.session_id,
-          observations,
-        });
-      }).toThrow(PhaseViolationError);
+      const result = submitObservations({
+        session_id: initResult.session_id,
+        agent_id: 'test-agent-2',
+        observations,
+      });
+
+      expect(result.status).toBe('accepted');
+      expect(result.observations_count).toBe(2);
     });
   });
 

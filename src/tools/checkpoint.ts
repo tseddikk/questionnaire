@@ -8,7 +8,7 @@
  */
 
 import { collaborativeStore } from '../state/collaborative-store.js';
-import { PhaseViolationError, CheckpointIncompleteError } from '../state/errors.js';
+import { CheckpointIncompleteError } from '../state/errors.js';
 import { getUnansweredSubQuestions, areAllSubQuestionsAnswered } from './submit-finding.js';
 import type { CheckpointInput } from '../types/schemas.js';
 import type { CheckpointResponse, CrossCuttingSignal, Finding, AgentFinding } from '../types/domain.js';
@@ -112,16 +112,6 @@ function analyzeCrossCuttingSignals(
 export function checkpoint(input: CheckpointInput): CheckpointResponse {
   // Get session from collaborative store
   const session = collaborativeStore.getSession(input.session_id);
-
-  // Validate phase
-  if (session.phase !== 4) {
-    throw new PhaseViolationError(
-      'checkpoint',
-      session.phase,
-      4,
-      session
-    );
-  }
 
   // Verify main question exists
   const mainQuestion = collaborativeStore.getMainQuestion(

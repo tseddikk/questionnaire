@@ -8,7 +8,7 @@
  */
 
 import { collaborativeStore } from '../state/collaborative-store.js';
-import { PhaseViolationError, SynthesizerOnlyError } from '../state/errors.js';
+import { SynthesizerOnlyError } from '../state/errors.js';
 import type { FinalizeReportInput } from '../types/schemas.js';
 import type { 
   FinalizeResponse, 
@@ -215,14 +215,13 @@ export function finalizeReport(input: FinalizeReportInput): FinalizeResponse {
   // Get session from collaborative store
   const session = collaborativeStore.getSession(input.session_id);
 
-  // Validate phase - must be phase 4 (investigation complete) or 5 (already finalizing)
-  if (session.phase !== 4 && session.phase !== 5) {
-    throw new PhaseViolationError(
-      'finalize_report',
-      session.phase,
-      4,
-      session
-    );
+  // Validate - must have at least one finding to finalize
+  if (session.findings.length === 0) {
+    return {
+      status: 'rejected',
+      reason: 'NO_FINDINGS',
+      guidance: 'Cannot finalize a report with no findings. Submit findings before finalizing.',
+    } as unknown as FinalizeResponse;
   }
 
   // Check collaborative preconditions

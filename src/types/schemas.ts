@@ -177,6 +177,7 @@ export const SubQuestionInputSchema = z.object({
 
 export const SubmitSubQuestionsInputSchema = z.object({
   session_id: z.string().uuid(),
+  agent_id: z.string().min(1, 'Agent ID is required'),
   main_question_id: z.string().uuid(),
   sub_questions: z.array(SubQuestionInputSchema).min(1, 'At least one sub-question required'),
 });

@@ -8,7 +8,6 @@
  */
 
 import { collaborativeStore } from '../state/collaborative-store.js';
-import { PhaseViolationError } from '../state/errors.js';
 import { validateFindingForSubmission } from '../validation/finding-validator.js';
 import type { SubmitFindingInput } from '../types/schemas.js';
 import type { FindingResponse, Finding } from '../types/domain.js';
@@ -23,17 +22,7 @@ import type { FindingResponse, Finding } from '../types/domain.js';
 export function submitFinding(input: SubmitFindingInput): FindingResponse {
   // Get session
   const session = collaborativeStore.getSession(input.session_id);
-  
-  // Validate phase
-  if (session.phase !== 4) {
-    throw new PhaseViolationError(
-      'submit_finding',
-      session.phase,
-      4,
-      session
-    );
-  }
-  
+
   // Verify sub-question exists
   const subQuestion = collaborativeStore.getSubQuestion(
     session.session_id,

@@ -719,14 +719,10 @@ export class CollaborativeSessionStore {
   }
 
   /**
-   * Set observations for a session (Standard/Single-agent mode)
+   * Set observations for a session
    */
   setObservations(sessionId: string, agentId: string, observations: any): void {
     const session = this.getSession(sessionId, true);
-
-    if (session.phase !== 1) {
-      throw new Error(`Cannot set observations in phase ${session.phase}`);
-    }
 
     session.observation_sets.push({
       agent_id: agentId,
@@ -734,29 +730,30 @@ export class CollaborativeSessionStore {
       submitted_at: new Date(),
     });
 
-    session.phase = 2;
+    // Auto-advance phase when observations are submitted
+    if (session.phase < 2) {
+      session.phase = 2;
+    }
     session.updated_at = new Date();
     this.saveSession(session);
   }
 
   /**
-   * Add a main question (Standard/Single-agent mode)
+   * Add a main question
    */
   addMainQuestion(
     sessionId: string,
     agentId: string,
-    question: Omit<MainQuestion, 'id' | 'sub_question_ids'>
+    question: Omit<MainQuestion, 'id' | 'sub_question_ids' | 'author_agent_id' | 'created_at'>
   ): MainQuestion {
     const session = this.getSession(sessionId, true);
-
-    if (session.phase !== 2) {
-      throw new Error(`Cannot add main questions in phase ${session.phase}`);
-    }
 
     const fullQuestion: MainQuestion = {
       ...question,
       id: uuidv4(),
       sub_question_ids: [],
+      author_agent_id: agentId,
+      created_at: new Date(),
     };
 
     session.merged_questions.push(fullQuestion);
@@ -809,24 +806,24 @@ export class CollaborativeSessionStore {
    */
   addSubQuestions(
     sessionId: string,
+    agentId: string,
     mainQuestionId: string,
-    subQuestions: Omit<SubQuestion, 'id' | 'main_question_id'>[]
+    subQuestions: Omit<SubQuestion, 'id' | 'main_question_id' | 'author_agent_id' | 'created_at'>[]
   ): SubQuestion[] {
     const session = this.getSession(sessionId, true);
-
-    if (session.phase !== 3) {
-      throw new Error(`Cannot add sub-questions in phase ${session.phase}`);
-    }
 
     const mainQuestion = session.merged_questions.find(q => q.id === mainQuestionId);
     if (!mainQuestion) {
       throw new Error(`Main question ${mainQuestionId} not found`);
     }
 
+    const now = new Date();
     const createdSubQuestions: SubQuestion[] = subQuestions.map(sq => ({
       ...sq,
       id: uuidv4(),
       main_question_id: mainQuestionId,
+      author_agent_id: agentId,
+      created_at: now,
     }));
 
     session.sub_question_pool.push(...createdSubQuestions);
@@ -849,10 +846,6 @@ export class CollaborativeSessionStore {
    */
   addFinding(sessionId: string, agentId: string, finding: any): AgentFinding {
     const session = this.getSession(sessionId, true);
-
-    if (session.phase !== 4 && session.phase !== 5) {
-      throw new Error(`Cannot add findings in phase ${session.phase}`);
-    }
 
     const agentFinding: AgentFinding = {
       ...finding,
@@ -907,10 +900,6 @@ export class CollaborativeSessionStore {
     _crossCuttingSignals: any[] = []
   ): void {
     const session = this.getSession(sessionId);
-
-    if (session.phase !== 4) {
-      throw new Error(`Cannot add checkpoints in phase ${session.phase}`);
-    }
 
     session.agent_checkpoints.push({
       agent_id: agentId,

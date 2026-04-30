@@ -10,7 +10,6 @@
 
 import { collaborativeStore } from '../state/collaborative-store.js';
 import {
-  PhaseViolationError,
   QuestionLimitReachedError,
 } from '../state/errors.js';
 import { validateMainQuestion } from '../validation/question-validator.js';
@@ -30,16 +29,6 @@ export function submitQuestion(input: SubmitQuestionInput): QuestionResponse | E
 
   // Get session
   const session = collaborativeStore.getSession(input.session_id);
-
-  // Validate phase
-  if (session.phase !== 2) {
-    throw new PhaseViolationError(
-      toolName,
-      session.phase,
-      2,
-      session
-    );
-  }
 
   // Check if we've reached max questions
   const config = DEPTH_CONFIG[session.depth];
@@ -81,7 +70,7 @@ export function submitQuestion(input: SubmitQuestionInput): QuestionResponse | E
   const newCount = updatedSession.merged_questions.length;
 
   // Advance to Phase 3 if minimum questions reached
-  if (newCount >= config.min_main_questions && updatedSession.phase === 2) {
+  if (newCount >= config.min_main_questions && updatedSession.phase < 3) {
     collaborativeStore.advancePhase(updatedSession.session_id, 3);
   }
 
