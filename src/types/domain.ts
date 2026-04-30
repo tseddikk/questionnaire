@@ -560,6 +560,58 @@ export interface FinalizeResponse {
   report_schema: ReportSchema;
 }
 
+export interface WorkflowStep {
+  phase: number;
+  name: string;
+  description: string;
+  tools: string[];
+  preconditions: string[];
+  expected_outcomes: string[];
+}
+
+export interface RoleGuide {
+  role: string;
+  description: string;
+  can_do: string[];
+  cannot_do: string[];
+  workflow_tips: string[];
+}
+
+export interface CommonMistakes {
+  mistake: string;
+  consequence: string;
+  correction: string;
+}
+
+export interface DomainPatternInfo {
+  name: string;
+  domain: string;
+  description: string;
+}
+
+export interface DomainPatternsExplanation {
+  summary: string;
+  patterns: DomainPatternInfo[];
+}
+
+export interface ToolUsageExample {
+  tool: string;
+  example: {
+    input: Record<string, any>;
+    output: Record<string, any>;
+  };
+}
+
+export interface GetWorkflowGuideResponse {
+  status: 'ok';
+  version: string;
+  phases: WorkflowStep[];
+  roles: RoleGuide[];
+  common_mistakes: CommonMistakes[];
+  tool_usage_examples: ToolUsageExample[];
+  domain_patterns: DomainPatternsExplanation;
+}
+
 // ============================================================================
 // Configuration
 // ============================================================================

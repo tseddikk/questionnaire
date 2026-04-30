@@ -30,6 +30,7 @@ import { getSessionSummaryTool, getSessionSummary } from './tools/get-session-su
 import { designateSynthesizerTool, designateSynthesizer } from './tools/designate-synthesizer.js';
 import { adjudicateFindingTool, adjudicateFinding } from './tools/adjudicate-finding.js';
 import { archiveSessionTool, archiveSession } from './tools/archive-session.js';
+import { getWorkflowGuideTool, getWorkflowGuide } from './tools/get-workflow-guide.js';
 
 import { AuditError } from './state/errors.js';
 import { ZodError } from 'zod';
@@ -61,6 +62,8 @@ const TOOLS = [
   designateSynthesizerTool,
   adjudicateFindingTool,
   archiveSessionTool,
+  // Utility tools
+  getWorkflowGuideTool,
 ] as unknown as Tool[];
 
 // ============================================================================
@@ -114,6 +117,8 @@ case 'join_session':
         return adjudicateFinding(args as unknown as Parameters<typeof adjudicateFinding>[0]);
       case 'archive_session':
         return archiveSession(args as { session_id: string; reason: string });
+      case 'get_workflow_guide':
+        return getWorkflowGuide();
 
       default:
         throw new Error(`Unknown tool: ${name}`);

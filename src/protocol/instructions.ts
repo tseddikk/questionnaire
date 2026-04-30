@@ -216,6 +216,18 @@ const COMMON_INSTRUCTIONS = `
 CRITICAL QUESTIONNAIRE PROTOCOL - AGENT INSTRUCTIONS
 ================================================================================
 
+IMPORTANT - FIRST ACTION:
+Before doing ANYTHING else, call the get_workflow_guide tool to understand
+the complete audit protocol. This will prevent hallucinations and ensure you
+follow the correct workflow.
+
+Quick Reference:
+- Call get_workflow_guide for complete protocol details
+- Follow the 6-phase protocol in order (0 → 1 → 2 → 3 → 4 → 5)
+- Only the designated Synthesizer can call finalize_report
+- Investigators can checkpoint by submitting findings OR reacting to existing findings
+- All findings need file citations with specific paths and line numbers
+
 This is a STRUCTURED AUDIT. You MUST follow the phase protocol.
 
 PHASE 0: Initialize (COMPLETE)
