@@ -245,25 +245,20 @@ export function finalizeReport(input: FinalizeReportInput): FinalizeResponse {
     );
   }
 
-  // Check if all main questions are checkpointed
+  // Check if all main questions have at least one checkpoint (from any agent)
+  // Note: The precondition check above already verified each agent has checkpointed all questions
+  // This is a secondary safety check
   const remaining = collaborativeStore.getUncheckpointedMainQuestions(session.session_id);
   if (remaining.length > 0) {
     return {
-      status: 'report_authorized',
-      findings_summary: generateFindingSummary(session.findings),
-      cross_cutting_concerns: [],
-      escalations: [],
-      report_schema: {
-        version: '1.0',
-        required_sections: [
-          'executive_summary',
-          'findings_by_main_question',
-          'cross_cutting_concerns',
-          'remediation_roadmap',
-          'appendix_methodology',
-        ],
-      },
-    };
+      status: 'rejected',
+      reason: 'UNCHECKPOINTED_QUESTIONS',
+      failed_preconditions: [{
+        condition: 'UNCHECKPOINTED_QUESTIONS',
+        detail: `${remaining.length} main question(s) have no checkpoints.`,
+        action: 'All main questions must be checkpointed before finalizing.',
+      }],
+    } as unknown as FinalizeResponse;
   }
 
   // Ensure phase is 5
