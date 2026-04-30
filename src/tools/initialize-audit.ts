@@ -23,7 +23,7 @@ import type { InitializeResponse } from '../types/domain.js';
  */
 export async function initializeAudit(input: InitializeAuditInput): Promise<InitializeResponse> {
   // Create the session in the collaborative store
-  const agentId = 'agent-0'; // Default initiator ID
+  const agentId = input.agent_id;
   const session = collaborativeStore.createSession(
     input.repo_path,
     input.domain,
@@ -109,6 +109,10 @@ export const initializeAuditTool = {
       repo_path: {
         type: 'string' as const,
         description: 'Absolute path to the repository to audit',
+      },
+      agent_id: {
+        type: 'string' as const,
+        description: 'Agent ID creating the session',
       },
       domain: {
         type: 'string' as const,

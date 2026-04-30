@@ -80,6 +80,7 @@ export const QuestionPatternSchema = z.enum([
 
 export const InitializeAuditInputSchema = z.object({
   repo_path: z.string().min(1, 'Repository path is required'),
+  agent_id: z.string().min(1, 'Agent ID is required'),
   domain: AuditDomainSchema,
   depth: AuditDepthSchema,
 });
