@@ -206,6 +206,7 @@ export const SubmitFindingInputSchema = z.object({
 export const CheckpointInputSchema = z.object({
   session_id: z.string().uuid(),
   main_question_id: z.string().uuid(),
+  agent_id: z.string().min(1, 'Agent ID is required'),
 });
 
 export const FinalizeReportInputSchema = z.object({

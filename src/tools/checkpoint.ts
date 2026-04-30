@@ -112,7 +112,7 @@ function analyzeCrossCuttingSignals(
 export function checkpoint(input: CheckpointInput): CheckpointResponse {
   // Get session from collaborative store
   const session = collaborativeStore.getSession(input.session_id);
-  
+
   // Validate phase
   if (session.phase !== 4) {
     throw new PhaseViolationError(
@@ -122,13 +122,13 @@ export function checkpoint(input: CheckpointInput): CheckpointResponse {
       session
     );
   }
-  
+
   // Verify main question exists
   const mainQuestion = collaborativeStore.getMainQuestion(
     session.session_id,
     input.main_question_id
   );
-  
+
   if (!mainQuestion) {
     return {
       status: 'incomplete',
@@ -136,9 +136,12 @@ export function checkpoint(input: CheckpointInput): CheckpointResponse {
       reason: `Main question ${input.main_question_id} not found.`,
     };
   }
-  
-  // Check if already checkpointed
-  if (collaborativeStore.isCheckpointed(session.session_id, input.main_question_id)) {
+
+  // Check if already checkpointed by this agent
+  const existingCheckpoint = session.agent_checkpoints.find(
+    cp => cp.main_question_id === input.main_question_id && cp.agent_id === input.agent_id
+  );
+  if (existingCheckpoint) {
     const updatedSession = collaborativeStore.getSession(session.session_id, true);
     return {
       status: 'checkpoint_accepted',
@@ -147,37 +150,37 @@ export function checkpoint(input: CheckpointInput): CheckpointResponse {
       cross_cutting_signals: [],
     };
   }
-  
-  // Check if all sub-questions have findings
-  if (!areAllSubQuestionsAnswered(session.session_id, input.main_question_id)) {
-    const missing = getUnansweredSubQuestions(session.session_id, input.main_question_id);
+
+  // Check if all sub-questions have findings OR agent has reacted to all
+  // Pass agent_id to allow reaction-based checkpointing
+  if (!areAllSubQuestionsAnswered(session.session_id, input.main_question_id, input.agent_id)) {
+    const missing = getUnansweredSubQuestions(session.session_id, input.main_question_id, input.agent_id);
     throw new CheckpointIncompleteError('checkpoint', input.main_question_id, missing);
   }
-  
+
   // Get findings for this main question
   const findings = collaborativeStore.getFindingsForMainQuestion(
     session.session_id,
     input.main_question_id
   );
-  
+
   // Analyze cross-cutting signals
   const crossCuttingSignals = analyzeCrossCuttingSignals(findings);
-  
-  // Record checkpoint
-  const agentId = 'agent-0';
+
+  // Record checkpoint with the calling agent's ID
   collaborativeStore.addCheckpoint(
     session.session_id,
-    agentId,
+    input.agent_id,
     input.main_question_id,
     crossCuttingSignals
   );
-  
+
   const updatedSession = collaborativeStore.getSession(session.session_id, true);
   const mainQuestionIndex = updatedSession.merged_questions.findIndex(
     q => q.id === input.main_question_id
   );
   const remaining = collaborativeStore.getUncheckpointedMainQuestions(session.session_id);
-  
+
   return {
     status: 'checkpoint_accepted',
     main_question_index: mainQuestionIndex,
@@ -192,7 +195,7 @@ export function checkpoint(input: CheckpointInput): CheckpointResponse {
 
 export const checkpointTool = {
   name: 'checkpoint',
-  description: 'Checkpoint a main question after all sub-questions have findings (Phase 4).',
+  description: 'Checkpoint a main question after investigating (Phase 4). An agent can checkpoint if they have submitted findings OR reacted to all existing findings for that main question.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -206,7 +209,11 @@ export const checkpointTool = {
         format: 'uuid',
         description: 'ID of the main question to checkpoint',
       },
+      agent_id: {
+        type: 'string',
+        description: 'Agent ID calling checkpoint (for multi-agent tracking)',
+      },
     },
-    required: ['session_id', 'main_question_id'],
+    required: ['session_id', 'main_question_id', 'agent_id'],
   },
 };

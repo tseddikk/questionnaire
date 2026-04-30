@@ -101,32 +101,67 @@ export function submitFinding(input: SubmitFindingInput): FindingResponse {
 
 /**
  * Check if all sub-questions for a main question have findings
+ * OR if the agent has reacted to all existing findings
  */
 export function areAllSubQuestionsAnswered(
   sessionId: string,
-  mainQuestionId: string
+  mainQuestionId: string,
+  agentId?: string
 ): boolean {
   const session = collaborativeStore.getSession(sessionId);
   const subQuestions = session.sub_question_pool.filter(
     sq => sq.main_question_id === mainQuestionId
   );
-  
-  return subQuestions.every(sq => 
+
+  // If agentId provided, check if agent has participated via reactions
+  if (agentId && session.finding_reactions) {
+    const agentReactions = session.finding_reactions.filter(r => r.agent_id === agentId);
+    const reactedSubQuestionIds = new Set(
+      session.findings
+        .filter(f => agentReactions.some(r => r.finding_id === f.finding_id))
+        .map(f => f.sub_question_id)
+    );
+
+    // Check if agent has reacted to ALL sub-questions for this main question
+    const allReacted = subQuestions.every(sq => reactedSubQuestionIds.has(sq.id));
+    if (allReacted) {
+      return true;
+    }
+  }
+
+  return subQuestions.every(sq =>
     session.findings.some(f => f.sub_question_id === sq.id)
   );
 }
 
 /**
  * Get sub-questions without findings for a main question
+ * Optionally check for agent's reactions
  */
 export function getUnansweredSubQuestions(
   sessionId: string,
-  mainQuestionId: string
+  mainQuestionId: string,
+  agentId?: string
 ): { id: string; text: string }[] {
   const session = collaborativeStore.getSession(sessionId);
   const subQuestions = session.sub_question_pool.filter(
     sq => sq.main_question_id === mainQuestionId
   );
+
+  // If agent has reacted to all, return empty
+  if (agentId && session.finding_reactions) {
+    const agentReactions = session.finding_reactions.filter(r => r.agent_id === agentId);
+    const reactedSubQuestionIds = new Set(
+      session.findings
+        .filter(f => agentReactions.some(r => r.finding_id === f.finding_id))
+        .map(f => f.sub_question_id)
+    );
+
+    const allReacted = subQuestions.every(sq => reactedSubQuestionIds.has(sq.id));
+    if (allReacted) {
+      return [];
+    }
+  }
 
   return subQuestions
     .filter(sq => !session.findings.some(f => f.sub_question_id === sq.id))
