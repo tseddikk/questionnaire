@@ -103,12 +103,13 @@ describe('MCP Tools', () => {
       expect(result.current_phase).toBe(2);
     });
 
-    it('should reject observations without file citations', async () => {
-      const initResult = await initializeAudit({
-        repo_path: repoPath,
-        domain: 'security',
-        depth: 'standard',
-      });
+  it('should reject observations without file citations', async () => {
+    const initResult = await initializeAudit({
+      repo_path: repoPath,
+      agent_id: 'test-agent',
+      domain: 'security',
+      depth: 'standard',
+    });
 
       const observations: SubmitObservationsInput['observations'] = {
         purpose: 'Test application',
@@ -123,10 +124,11 @@ describe('MCP Tools', () => {
       };
 
       expect(() => {
-        submitObservations({
-          session_id: initResult.session_id,
-          observations,
-        });
+  submitObservations({
+    session_id: initResult.session_id,
+    agent_id: 'test-agent',
+    observations,
+  });
       }).toThrow('Missing file citation');
     });
 
@@ -168,32 +170,35 @@ describe('MCP Tools', () => {
   });
 
   describe('submit_question', () => {
-    it('should accept valid main questions', async () => {
-      // Initialize and submit observations
-      const initResult = await initializeAudit({
-        repo_path: repoPath,
-        domain: 'security',
-        depth: 'standard',
-      });
+  it('should accept valid main questions', async () => {
+    // Initialize and submit observations
+    const initResult = await initializeAudit({
+      repo_path: repoPath,
+      agent_id: 'test-agent',
+      domain: 'security',
+      depth: 'standard',
+    });
 
-      submitObservations({
-        session_id: initResult.session_id,
-        observations: {
-          purpose: 'Test',
-          tech_stack: [{ name: 'React', version: '18.0.0', file_path: '/package.json' }],
-          entry_points: [],
-          data_flows: [],
-          auth_mechanisms: [],
-          error_patterns: [],
-          test_coverage: [],
-          config_secrets: [],
-          deployment: [],
-        },
-      });
+    submitObservations({
+      session_id: initResult.session_id,
+      agent_id: 'test-agent',
+      observations: {
+        purpose: 'Test',
+        tech_stack: [{ name: 'React', version: '18.0.0', file_path: '/package.json' }],
+        entry_points: [],
+        data_flows: [],
+        auth_mechanisms: [],
+        error_patterns: [],
+        test_coverage: [],
+        config_secrets: [],
+        deployment: [],
+      },
+    });
 
-      const input: SubmitQuestionInput = {
-        session_id: initResult.session_id,
-        question: {
+    const input: SubmitQuestionInput = {
+      session_id: initResult.session_id,
+      agent_id: 'test-agent',
+      question: {
           text: 'Where is user input validated in the session store, and what happens if validation is bypassed?',
           target_files: ['/src/session.ts'],
           suspicion_rationale: 'The session store accepts user input without clear validation boundaries of at least 20 chars.',
@@ -209,33 +214,36 @@ describe('MCP Tools', () => {
       expect(result.questions_accepted_so_far).toBe(1);
     });
 
-    it('should reject binary questions', async () => {
-      // Initialize and submit observations
-      const initResult = await initializeAudit({
-        repo_path: repoPath,
-        domain: 'security',
-        depth: 'standard',
-      });
+  it('should reject binary questions', async () => {
+    // Initialize and submit observations
+    const initResult = await initializeAudit({
+      repo_path: repoPath,
+      agent_id: 'test-agent',
+      domain: 'security',
+      depth: 'standard',
+    });
 
-      submitObservations({
-        session_id: initResult.session_id,
-        observations: {
-          purpose: 'Test',
-          tech_stack: [{ name: 'React', version: '18.0.0', file_path: '/package.json' }],
-          entry_points: [],
-          data_flows: [],
-          auth_mechanisms: [],
-          error_patterns: [],
-          test_coverage: [],
-          config_secrets: [],
-          deployment: [],
-        },
-      });
+    submitObservations({
+      session_id: initResult.session_id,
+      agent_id: 'test-agent',
+      observations: {
+        purpose: 'Test',
+        tech_stack: [{ name: 'React', version: '18.0.0', file_path: '/package.json' }],
+        entry_points: [],
+        data_flows: [],
+        auth_mechanisms: [],
+        error_patterns: [],
+        test_coverage: [],
+        config_secrets: [],
+        deployment: [],
+      },
+    });
 
-      const input: SubmitQuestionInput = {
-        session_id: initResult.session_id,
-        question: {
-          text: 'Is authentication implemented?',
+    const input: SubmitQuestionInput = {
+      session_id: initResult.session_id,
+      agent_id: 'test-agent',
+      question: {
+        text: 'Is authentication implemented?',
           target_files: ['/src/auth.ts'],
           suspicion_rationale: 'Short description here for testing which must be longer than 20 chars.',
           edge_case_targeted: 'Test edge case description which must also be long enough for the validator.',
@@ -253,27 +261,30 @@ describe('MCP Tools', () => {
   });
 
   describe('submit_sub_questions', () => {
-    async function setupPhase3(domain: any = 'security', depth: any = 'standard') {
-      const initResult = await initializeAudit({
-        repo_path: repoPath,
-        domain,
-        depth,
-      });
+  async function setupPhase3(domain: any = 'security', depth: any = 'standard') {
+    const initResult = await initializeAudit({
+      repo_path: repoPath,
+      agent_id: 'test-agent',
+      domain,
+      depth,
+    });
 
-      submitObservations({
+    submitObservations({
+      session_id: initResult.session_id,
+      agent_id: 'test-agent',
+      observations: {
+        purpose: 'Test',
+        tech_stack: [{ name: 'React', version: '18.0.0', file_path: '/package.json' }],
+        entry_points: [], data_flows: [], auth_mechanisms: [], error_patterns: [], test_coverage: [], config_secrets: [], deployment: [],
+      },
+    });
+
+    const questionIds: string[] = [];
+    for (let i = 1; i <= 5; i++) {
+      const qResult = submitQuestion({
         session_id: initResult.session_id,
-        observations: {
-          purpose: 'Test',
-          tech_stack: [{ name: 'React', version: '18.0.0', file_path: '/package.json' }],
-          entry_points: [], data_flows: [], auth_mechanisms: [], error_patterns: [], test_coverage: [], config_secrets: [], deployment: [],
-        },
-      });
-
-      const questionIds: string[] = [];
-      for (let i = 1; i <= 5; i++) {
-        const qResult = submitQuestion({
-          session_id: initResult.session_id,
-          question: {
+        agent_id: 'test-agent',
+        question: {
             text: `Question ${i}: Where is user input validated, and what happens if validation is bypassed?`,
             target_files: [`/src/file${i}.ts`],
             suspicion_rationale: `The validation boundaries for component ${i} appear to be inconsistent based on the data flows observed in Phase 1.`,
@@ -295,9 +306,10 @@ describe('MCP Tools', () => {
       const qId = questionIds[0];
 
       // Call submit_sub_questions
-      const subResult = submitSubQuestions({
-        session_id: sessionId,
-        main_question_id: qId,
+  const subResult = submitSubQuestions({
+    session_id: sessionId,
+    agent_id: 'test-agent',
+    main_question_id: qId,
         sub_questions: [
           {
             text: 'Sub-question 1: Does the session store implementation enforce strict validation on all incoming set requests?',
@@ -335,9 +347,10 @@ describe('MCP Tools', () => {
     it('should return QUESTION_NOT_FOUND for invalid question IDs', async () => {
       const { sessionId } = await setupPhase3();
 
-      const subResult = submitSubQuestions({
-        session_id: sessionId,
-        main_question_id: '4244529c-b907-48b6-a541-0411baa27aad', // Some random ID
+  const subResult = submitSubQuestions({
+    session_id: sessionId,
+    agent_id: 'test-agent',
+    main_question_id: '4244529c-b907-48b6-a541-0411baa27aad', // Some random ID
         sub_questions: [
           {
             text: 'Sub-question 1: Does the session store implementation enforce strict validation on all incoming set requests?',

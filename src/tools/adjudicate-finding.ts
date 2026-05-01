@@ -80,6 +80,6 @@ export const adjudicateFindingTool = {
       },
       unresolved_detail: { type: 'string' as const },
     },
-    required: ['session_id', 'finding_id', 'ruling', 'reasoning'],
+    required: ['session_id', 'agent_id', 'finding_id', 'ruling', 'reasoning'],
   },
 };
