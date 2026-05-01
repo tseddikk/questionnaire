@@ -10,9 +10,10 @@
 import { collaborativeStore } from '../state/collaborative-store.js';
 import { SynthesizerOnlyError } from '../state/errors.js';
 import type { FinalizeReportInput } from '../types/schemas.js';
-import type { 
-  FinalizeResponse, 
-  FindingSummary, 
+import type {
+  FinalizeResponse,
+  FinalizeRejectedResponse,
+  FindingSummary,
   CrossCuttingConcern,
   Finding,
   AgentFinding,
@@ -69,21 +70,18 @@ function generateCrossCuttingConcerns(
   
   // Aggregate signals across all checkpoints
   for (const checkpoint of checkpoints) {
-    // Only CheckpointRecord has cross_cutting_signals
-    if ('cross_cutting_signals' in checkpoint) {
-      for (const signal of checkpoint.cross_cutting_signals) {
-        const existing = patternCounts.get(signal.pattern);
-        if (existing) {
-          existing.count += signal.affected_count;
-          if (!existing.affected.includes(checkpoint.main_question_id)) {
-            existing.affected.push(checkpoint.main_question_id);
-          }
-        } else {
-          patternCounts.set(signal.pattern, {
-            count: signal.affected_count,
-            affected: [checkpoint.main_question_id],
-          });
+    for (const signal of checkpoint.cross_cutting_signals) {
+      const existing = patternCounts.get(signal.pattern);
+      if (existing) {
+        existing.count += signal.affected_count;
+        if (!existing.affected.includes(checkpoint.main_question_id)) {
+          existing.affected.push(checkpoint.main_question_id);
         }
+      } else {
+        patternCounts.set(signal.pattern, {
+          count: signal.affected_count,
+          affected: [checkpoint.main_question_id],
+        });
       }
     }
   }
@@ -221,7 +219,7 @@ export function finalizeReport(input: FinalizeReportInput): FinalizeResponse {
       status: 'rejected',
       reason: 'NO_FINDINGS',
       guidance: 'Cannot finalize a report with no findings. Submit findings before finalizing.',
-    } as unknown as FinalizeResponse;
+    } satisfies FinalizeRejectedResponse;
   }
 
   // Check collaborative preconditions
@@ -232,7 +230,7 @@ export function finalizeReport(input: FinalizeReportInput): FinalizeResponse {
       reason: 'PRECONDITIONS_NOT_MET',
       failed_preconditions: preconditionFailures,
       guidance: 'All preconditions must be satisfied before finalizing.',
-    } as unknown as FinalizeResponse;
+    } satisfies FinalizeRejectedResponse;
   }
 
   // Validate synthesizer-only access - only the designated synthesizer can finalize
@@ -257,7 +255,8 @@ export function finalizeReport(input: FinalizeReportInput): FinalizeResponse {
         detail: `${remaining.length} main question(s) have no checkpoints.`,
         action: 'All main questions must be checkpointed before finalizing.',
       }],
-    } as unknown as FinalizeResponse;
+      guidance: 'All main questions must be checkpointed before finalizing.',
+    } satisfies FinalizeRejectedResponse;
   }
 
   // Ensure phase is 5
@@ -326,7 +325,11 @@ export const finalizeReportTool = {
         format: 'uuid',
         description: 'Session ID',
       },
+      agent_id: {
+        type: 'string',
+        description: 'Agent ID - must be the designated synthesizer to finalize',
+      },
     },
-    required: ['session_id'],
+    required: ['session_id', 'agent_id'],
   },
 };

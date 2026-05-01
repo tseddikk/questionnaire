@@ -15,11 +15,14 @@ import type {
   AgentId,
   AgentFinding,
   FindingReaction,
+  QuestionReaction,
   AdjudicationRecord,
   AuditDomain,
   AuditDepth,
   MainQuestion,
   SubQuestion,
+  HeatMap,
+  CrossCuttingSignal,
 } from '../types/domain.js';
 import { SessionNotFoundError, SessionExpiredError } from './errors.js';
 
@@ -498,6 +501,19 @@ export class CollaborativeSessionStore {
   }
 
   /**
+   * Add a reaction to a question
+   */
+  addQuestionReaction(
+    sessionId: string,
+    reaction: QuestionReaction
+  ): void {
+    const session = this.getSession(sessionId);
+    session.question_reactions.push(reaction);
+    session.updated_at = new Date();
+    this.saveSession(session);
+  }
+
+  /**
    * Add a reaction to a finding
    */
   addReaction(
@@ -719,6 +735,16 @@ export class CollaborativeSessionStore {
   }
 
   /**
+   * Set heat map for a session
+   */
+  setHeatMap(sessionId: string, heatMap: HeatMap): void {
+    const session = this.getSession(sessionId);
+    session.heat_map = heatMap;
+    session.updated_at = new Date();
+    this.saveSession(session);
+  }
+
+  /**
    * Set observations for a session
    */
   setObservations(sessionId: string, agentId: string, observations: any): void {
@@ -897,7 +923,7 @@ export class CollaborativeSessionStore {
     sessionId: string,
     agentId: string,
     mainQuestionId: string,
-    _crossCuttingSignals: any[] = []
+    crossCuttingSignals: CrossCuttingSignal[] = []
   ): void {
     const session = this.getSession(sessionId);
 
@@ -905,12 +931,8 @@ export class CollaborativeSessionStore {
       agent_id: agentId,
       main_question_id: mainQuestionId,
       completed_at: new Date(),
+      cross_cutting_signals: crossCuttingSignals,
     });
-
-    // In a real collaborative scenario, we might want to store signals per agent/question
-    // For now, we'll just track that the agent checkpointed it.
-    // If we want to support the same signals as the standard store:
-    // we might need to add a field to AgentCheckpoint or the session.
 
     session.updated_at = new Date();
     this.saveSession(session);

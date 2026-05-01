@@ -180,6 +180,6 @@ export const submitObservationsTool = {
         ],
       },
     },
-    required: ['session_id', 'observations'],
+    required: ['session_id', 'agent_id', 'observations'],
   },
 };

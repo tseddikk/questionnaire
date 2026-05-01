@@ -167,6 +167,6 @@ export const submitSubQuestionsTool = {
         description: 'Sub-questions decomposing the main question',
       },
     },
-    required: ['session_id', 'main_question_id', 'sub_questions'],
+    required: ['session_id', 'agent_id', 'main_question_id', 'sub_questions'],
   },
 };

@@ -44,8 +44,7 @@ export function reactToQuestion(input: ReactToQuestionInput): ReactToQuestionRes
     submitted_at: new Date(),
   };
 
-  session.question_reactions.push(reaction);
-  session.updated_at = new Date();
+  collaborativeStore.addQuestionReaction(input.session_id, reaction);
 
   return {
     status: 'accepted',

@@ -40,7 +40,7 @@ export async function initializeAudit(input: InitializeAuditInput): Promise<Init
   });
 
   // Store heat map in session
-  session.heat_map = heatMap;
+  collaborativeStore.setHeatMap(session.session_id, heatMap);
 
   // Advance to phase 1
   collaborativeStore.advancePhase(session.session_id, 1);
@@ -138,6 +138,6 @@ export const initializeAuditTool = {
         description: 'Override domain default weights',
       },
     },
-    required: ['repo_path', 'domain', 'depth'],
+    required: ['repo_path', 'agent_id', 'domain', 'depth'],
   },
 };

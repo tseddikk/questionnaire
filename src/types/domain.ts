@@ -38,7 +38,9 @@ export type RejectionReason =
   | 'ESCALATION_REQUIRED'
   | 'CHECKPOINT_INCOMPLETE'
   | 'SUB_QUESTION_COUNT_VIOLATION'
-  | 'QUESTION_NOT_FOUND';
+  | 'QUESTION_NOT_FOUND'
+  | 'SUB_QUESTION_NOT_FOUND'
+  | 'DUPLICATE_FINDING';
 
 export type QuestionPattern =
   | 'ASYNC_FAILURE'
@@ -340,6 +342,7 @@ export interface AgentCheckpoint {
   agent_id: AgentId;
   main_question_id: string;
   completed_at: Date;
+  cross_cutting_signals: CrossCuttingSignal[];
 }
 
 export type InvestigationStatus = 'unexamined' | 'single_agent' | 'confirmed' | 'contested' | 'resolved';
@@ -551,10 +554,15 @@ export interface CheckpointResponse {
   reason?: string;
 }
 
-export interface FinalizeResponse {
-  status: 'report_authorized' | 'rejected';
-  reason?: string;
+export interface FinalizeRejectedResponse {
+  status: 'rejected';
+  reason: string;
   failed_preconditions?: { condition: string; detail: string; action: string }[];
+  guidance?: string;
+}
+
+export interface FinalizeAuthorizedResponse {
+  status: 'report_authorized';
   findings_summary: FindingSummary;
   cross_cutting_concerns: CrossCuttingConcern[];
   escalations: EscalationFinding[];
@@ -563,6 +571,8 @@ export interface FinalizeResponse {
   heat_map_alignment?: HeatMapAlignment | null;
   report_schema: ReportSchema;
 }
+
+export type FinalizeResponse = FinalizeRejectedResponse | FinalizeAuthorizedResponse;
 
 export interface WorkflowStep {
   phase: number;

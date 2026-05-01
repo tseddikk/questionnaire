@@ -49,10 +49,13 @@ export function adjudicateFinding(input: AdjudicateFindingInput): AdjudicateFind
 
   collaborativeStore.addAdjudication(input.session_id, adjudication);
 
+  // Get updated session for accurate remaining count
+  const updatedSession = collaborativeStore.getSession(input.session_id);
+
   return {
     status: 'adjudication_recorded',
     adjudication_id: adjudication.id,
-    remaining_contested: session.contested_findings.length - 1,
+    remaining_contested: updatedSession.contested_findings.length,
   };
 }
 

@@ -43,7 +43,7 @@ export function listSubQuestions(input: ListSubQuestionsInput): ListSubQuestions
       return {
         sub_question_id: sq.id,
         text: sq.text,
-        author_agent_id: 'unknown', // SubQuestion doesn't track author
+        author_agent_id: sq.author_agent_id,
         pass_criteria: sq.pass_criteria,
         fail_criteria: sq.fail_criteria,
         evidence_pattern: sq.evidence_pattern,

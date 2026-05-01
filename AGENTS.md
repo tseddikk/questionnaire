@@ -1,4 +1,4 @@
-# AGENTS.md - Critical Questionnaire MCP
+# AGENTS.md - Questionnaire MCP
 
 ## Project Overview
 

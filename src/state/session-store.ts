@@ -408,37 +408,36 @@ export class PersistentSessionStore {
 
   /**
    * Set observations for a session
+   * Phase gate removed - contributions always accepted
    */
   setObservations(sessionId: string, observations: ObservationLog): void {
     const session = this.getSession(sessionId);
 
-    if (session.phase !== 1) {
-      throw new Error(`Cannot set observations in phase ${session.phase}`);
-    }
-
     session.observations = observations;
-    session.phase = 2;
+    if (session.phase < 2) {
+      session.phase = 2;
+    }
     session.updated_at = new Date();
     this.saveSession(session);
   }
 
   /**
    * Add a main question
+   * Phase gate removed - contributions always accepted
    */
   addMainQuestion(
     sessionId: string,
-    question: Omit<MainQuestion, 'id' | 'sub_question_ids'>
+    agentId: string,
+    question: Omit<MainQuestion, 'id' | 'sub_question_ids' | 'author_agent_id' | 'created_at'>
   ): MainQuestion {
     const session = this.getSession(sessionId);
-
-    if (session.phase !== 2) {
-      throw new Error(`Cannot add main questions in phase ${session.phase}`);
-    }
 
     const fullQuestion: MainQuestion = {
       ...question,
       id: uuidv4(),
       sub_question_ids: [],
+      author_agent_id: agentId,
+      created_at: new Date(),
     };
 
     session.main_questions.push(fullQuestion);
@@ -472,27 +471,28 @@ export class PersistentSessionStore {
 
   /**
    * Add sub-questions for a main question
+   * Phase gate removed - contributions always accepted
    */
   addSubQuestions(
     sessionId: string,
+    agentId: string,
     mainQuestionId: string,
-    subQuestions: Omit<SubQuestion, 'id' | 'main_question_id'>[]
+    subQuestions: Omit<SubQuestion, 'id' | 'main_question_id' | 'author_agent_id' | 'created_at'>[]
   ): SubQuestion[] {
     const session = this.getSession(sessionId);
-
-    if (session.phase !== 3) {
-      throw new Error(`Cannot add sub-questions in phase ${session.phase}`);
-    }
 
     const mainQuestion = session.main_questions.find(q => q.id === mainQuestionId);
     if (!mainQuestion) {
       throw new Error(`Main question ${mainQuestionId} not found`);
     }
 
+    const now = new Date();
     const createdSubQuestions: SubQuestion[] = subQuestions.map(sq => ({
       ...sq,
       id: uuidv4(),
       main_question_id: mainQuestionId,
+      author_agent_id: agentId,
+      created_at: now,
     }));
 
     session.sub_questions.push(...createdSubQuestions);
@@ -512,13 +512,10 @@ export class PersistentSessionStore {
 
   /**
    * Add a finding
+   * Phase gate removed - contributions always accepted
    */
   addFinding(sessionId: string, finding: Finding): Finding {
     const session = this.getSession(sessionId);
-
-    if (session.phase !== 4 && session.phase !== 5) {
-      throw new Error(`Cannot add findings in phase ${session.phase}`);
-    }
 
     // Check for duplicate
     const existingIndex = session.findings.findIndex(
@@ -570,6 +567,7 @@ export class PersistentSessionStore {
 
   /**
    * Add a checkpoint
+   * Phase gate removed - contributions always accepted
    */
   addCheckpoint(
     sessionId: string,
@@ -577,10 +575,6 @@ export class PersistentSessionStore {
     crossCuttingSignals: CheckpointRecord['cross_cutting_signals']
   ): void {
     const session = this.getSession(sessionId);
-
-    if (session.phase !== 4) {
-      throw new Error(`Cannot add checkpoints in phase ${session.phase}`);
-    }
 
     const checkpoint: CheckpointRecord = {
       main_question_id: mainQuestionId,
@@ -603,13 +597,10 @@ export class PersistentSessionStore {
 
   /**
    * Set final report
+   * Phase gate removed - uses findings check instead
    */
   setReport(sessionId: string, report: Report): void {
     const session = this.getSession(sessionId);
-
-    if (session.phase !== 5) {
-      throw new Error(`Cannot finalize report in phase ${session.phase}`);
-    }
 
     session.report = report;
     session.updated_at = new Date();

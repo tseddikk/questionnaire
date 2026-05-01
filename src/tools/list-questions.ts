@@ -35,8 +35,7 @@ export function listQuestions(input: ListQuestionsInput): ListQuestionsResponse 
 
   const questions: QuestionInfo[] = session.merged_questions.map(q => {
     // Get agent_id from question_pool
-    const agentQuestion = session.question_pool.find(aq => aq.question.id === q.id);
-    const author_agent_id = agentQuestion?.agent_id || 'unknown';
+    const author_agent_id = q.author_agent_id || 'unknown';
 
     const subQuestions = session.sub_question_pool.filter(
       sq => sq.main_question_id === q.id

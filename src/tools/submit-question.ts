@@ -168,6 +168,6 @@ export const submitQuestionTool = {
         ],
       },
     },
-    required: ['session_id', 'question'],
+    required: ['session_id', 'agent_id', 'question'],
   },
 };

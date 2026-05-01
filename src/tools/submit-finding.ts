@@ -32,7 +32,7 @@ export function submitFinding(input: SubmitFindingInput): FindingResponse {
   if (!subQuestion) {
     return {
       status: 'rejected',
-      reason: 'MISSING_TARGET_FILES',
+      reason: 'SUB_QUESTION_NOT_FOUND',
       guidance: `Sub-question ${input.sub_question_id} not found in this session.`,
     };
   }
@@ -41,7 +41,7 @@ export function submitFinding(input: SubmitFindingInput): FindingResponse {
   if (collaborativeStore.hasFindingForSubQuestion(session.session_id, input.sub_question_id)) {
     return {
       status: 'rejected',
-      reason: 'MISSING_SUSPICION_RATIONALE',
+      reason: 'DUPLICATE_FINDING',
       guidance: `A finding already exists for sub-question ${input.sub_question_id}. ` +
         'Each sub-question can only have one finding.',
     };
@@ -235,6 +235,6 @@ export const submitFindingTool = {
         ],
       },
     },
-    required: ['session_id', 'sub_question_id', 'finding'],
+    required: ['session_id', 'sub_question_id', 'agent_id', 'finding'],
   },
 };

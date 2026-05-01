@@ -69,10 +69,9 @@ function analyzeCrossCuttingSignals(
   }
   
   // Pattern: Resource leaks
-  const resourceLeakCount = findings.filter(f => 
-    (f.answer.toLowerCase().includes('leak') || 
-     f.answer.toLowerCase().includes('not.*release') ||
-     f.answer.toLowerCase().includes('not.*close')) &&
+  const resourceLeakCount = findings.filter(f =>
+    (f.answer.toLowerCase().includes('leak') ||
+     /not\s+(release|close)/i.test(f.answer)) &&
     (f.verdict === 'FAIL' || f.verdict === 'SUSPICIOUS')
   ).length;
   
