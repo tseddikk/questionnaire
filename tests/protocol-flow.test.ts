@@ -748,20 +748,6 @@ describe('Complete Protocol Flow', () => {
   });
 });
 
-describe('Report Finalization', () => {
-  it('should require agent_id parameter for finalize_report', () => {
-    // Test that FinalizeReportInput requires agent_id
-    // This is a schema-level test
-    const input = {
-      session_id: '123e4567-e89b-12d3-a456-426614174000',
-      // agent_id is now required
-    };
-
-    // The schema validation would reject this
-    expect(input).not.toHaveProperty('agent_id');
-  });
-});
-
   describe('Session Persistence', () => {
     it('should store sessions in project directory', async () => {
       const repoPath = `/tmp/test-persistence-${Date.now()}`;

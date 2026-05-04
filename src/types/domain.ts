@@ -364,16 +364,6 @@ export interface AgentCheckpoint {
   cross_cutting_signals: CrossCuttingSignal[];
 }
 
-export type InvestigationStatus = 'unexamined' | 'single_agent' | 'confirmed' | 'contested' | 'resolved';
-
-export interface InvestigationCoverage {
-  sub_question_id: string;
-  status: InvestigationStatus;
-  agents_investigated: AgentId[];
-  finding_ids: string[];
-  reactions: string[];
-}
-
 export interface AdjudicationRecord {
   id: string;
   finding_id: string;
@@ -390,15 +380,6 @@ export interface MergedFinding {
   evidence: Evidence[];
   verdict: Verdict;
   severity: Severity;
-}
-
-export interface UnresolvedFinding {
-  finding_id: string;
-  description: string;
-  positions: { agent_id: AgentId; position: string; evidence: Evidence }[];
-  what_would_resolve: string;
-  where_information_likely_exists: string;
-  severity_under_each_scenario: Record<AgentId, Severity>;
 }
 
 export interface InvestigatorStats {
@@ -434,18 +415,15 @@ export interface CollaborativeSession {
 
   // Phase 3: Sub-questions
   sub_question_pool: SubQuestion[];
-  outlier_sub_questions: SubQuestion[]; // Sub-questions only one agent generated
 
   // Phase 4: Investigation
   findings: AgentFinding[];
   finding_reactions: FindingReaction[];
-  investigation_coverage: Map<string, InvestigationCoverage>;
   agent_checkpoints: AgentCheckpoint[];
 
   // Phase 5: Synthesis
   contested_findings: string[];
   adjudications: AdjudicationRecord[];
-  unresolved_findings: UnresolvedFinding[];
 
   // Report
   report: Report | null;
@@ -543,7 +521,6 @@ export interface FinalizeAuthorizedResponse {
   cross_cutting_concerns: CrossCuttingConcern[];
   escalations: EscalationFinding[];
   adjudications?: AdjudicationRecord[];
-  unresolved_findings?: UnresolvedFinding[];
   heat_map_alignment?: HeatMapAlignment | null;
   report_schema: ReportSchema;
 }

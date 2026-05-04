@@ -58,10 +58,15 @@ export function getSessionSummary(input: GetSessionSummaryInput): GetSessionSumm
     byVerdict[finding.verdict] = (byVerdict[finding.verdict] || 0) + 1;
     bySeverity[finding.severity] = (bySeverity[finding.severity] || 0) + 1;
 
-    const coverage = session.investigation_coverage.get(finding.sub_question_id);
-    if (coverage) {
-      if (coverage.status === 'confirmed') {confirmed++;}
-      else if (coverage.status === 'single_agent') {singleAgent++;}
+    const reactions = session.finding_reactions.filter(r => r.finding_id === finding.finding_id);
+    const hasConfirm = reactions.some(r => r.reaction_type === 'confirm');
+    const hasChallenge = reactions.some(r => r.reaction_type === 'challenge');
+    if (hasChallenge) {
+      // contested - don't count as confirmed or single_agent
+    } else if (hasConfirm) {
+      confirmed++;
+    } else {
+      singleAgent++;
     }
   }
 

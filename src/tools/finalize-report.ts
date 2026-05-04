@@ -312,7 +312,6 @@ export function finalizeReport(input: FinalizeReportInput): FinalizeResponse {
     escalations,
     heat_map_alignment: heatMapAlignment,
     adjudications: session.adjudications,
-    unresolved_findings: session.unresolved_findings,
     report_schema: {
       version: '1.0',
       required_sections: [
@@ -323,7 +322,6 @@ export function finalizeReport(input: FinalizeReportInput): FinalizeResponse {
         'appendix_methodology',
         'collaborative_metadata',
         'investigator_performance',
-        'unresolved_findings',
       ],
     },
   };

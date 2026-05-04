@@ -24,6 +24,7 @@ import type {
   SubQuestion,
   HeatMap,
   CrossCuttingSignal,
+  SessionState,
 } from '../types/domain.js';
 import { SessionNotFoundError, SessionExpiredError, RepoMismatchError, SessionNotJoinableError, PhaseViolationError, UnknownMainQuestionError } from './errors.js';
 
@@ -204,14 +205,6 @@ export class CollaborativeSessionStore {
         }
       }
             
-            // Fix: Map serialization issues. JSON.parse makes it a regular object.
-            // If it's an object but should be a Map, we need to convert it.
-            if (session.investigation_coverage && !(session.investigation_coverage instanceof Map)) {
-               session.investigation_coverage = new Map(Object.entries(session.investigation_coverage));
-            } else if (!session.investigation_coverage) {
-               session.investigation_coverage = new Map();
-            }
-
             // Track the repo path for this session
             this.repoPaths.set(sessionId, repoPath);
             this.sessions.set(sessionId, session);
@@ -232,21 +225,24 @@ export class CollaborativeSessionStore {
   private saveSession(session: CollaborativeSession): void {
     const repoPath = this.repoPaths.get(session.session_id);
     if (!repoPath) {
-      console.error(`No repo path known for collaborative session ${session.session_id}`);
-      return;
+      throw new Error(
+        `SESSION_SAVE_FAILED: No repo path known for session ${session.session_id}. ` +
+        'The session registry may be corrupted or clearMemoryOnly was called.'
+      );
     }
-
-    // Update memory cache
-    this.sessions.set(session.session_id, session);
 
     const sessionPath = this.getSessionPath(session.session_id, repoPath);
     try {
       writeFileSync(sessionPath, JSON.stringify(session, null, 2), 'utf-8');
     } catch (e) {
-      const error = new Error(`Failed to save collaborative session ${session.session_id}: ${e instanceof Error ? e.message : String(e)}`);
-      error.name = 'SessionSaveError';
-      throw error;
+      throw new Error(
+        `SESSION_SAVE_FAILED: Could not write session ${session.session_id} to ${sessionPath}: ` +
+        `${e instanceof Error ? e.message : String(e)}`
+      );
     }
+
+    // Update memory cache ONLY after successful disk write
+    this.sessions.set(session.session_id, session);
   }
 
   /**
@@ -346,16 +342,13 @@ export class CollaborativeSessionStore {
       merged_questions: [],
       // Phase 3: Sub-questions
       sub_question_pool: [],
-      outlier_sub_questions: [],
       // Phase 4: Investigation
       findings: [],
       finding_reactions: [],
-      investigation_coverage: new Map(),
       agent_checkpoints: [],
       // Phase 5: Synthesis
       contested_findings: [],
       adjudications: [],
-      unresolved_findings: [],
       // Report
       report: null,
       // Archive
@@ -490,6 +483,14 @@ export class CollaborativeSessionStore {
    */
   designateSynthesizer(sessionId: string, agentId: AgentId): void {
     const session = this.getSession(sessionId);
+
+    const agent = session.agents.find(a => a.agent_id === agentId);
+    if (!agent) {
+      throw new Error(
+        `AGENT_NOT_MEMBER: Cannot designate ${agentId} as synthesizer because they are not a session member.`
+      );
+    }
+
     const oldSynthesizer = session.synthesizer;
     session.synthesizer = agentId;
 
@@ -501,11 +502,8 @@ export class CollaborativeSessionStore {
       }
     }
 
-    // Update role of the designated agent
-    const agent = session.agents.find(a => a.agent_id === agentId);
-    if (agent) {
-      agent.role = 'synthesizer';
-    }
+    // Promote designated agent
+    agent.role = 'synthesizer';
 
     session.updated_at = new Date();
     this.saveSession(session);
@@ -746,11 +744,26 @@ export class CollaborativeSessionStore {
   advancePhase(sessionId: string, newPhase: number): void {
     const session = this.getSession(sessionId);
 
+    if (newPhase < 0 || newPhase > 5) {
+      throw new Error(`Invalid phase: ${newPhase}. Must be between 0 and 5.`);
+    }
     if (session.phase >= newPhase) {
       throw new PhaseViolationError('advance_phase', session.phase as AuditPhase, newPhase as AuditPhase);
     }
 
-    session.phase = newPhase as any;
+    session.phase = newPhase as AuditPhase;
+
+    // Keep session_state synchronized with phase
+    const stateMap: Record<number, SessionState> = {
+      0: 'initialized',
+      1: 'investigating',
+      2: 'investigating',
+      3: 'investigating',
+      4: 'investigating',
+      5: 'pending_synthesis',
+    };
+    session.session_state = stateMap[newPhase];
+
     session.updated_at = new Date();
     this.saveSession(session);
   }
@@ -780,6 +793,7 @@ export class CollaborativeSessionStore {
     // Auto-advance phase when observations are submitted
     if (session.phase < 2) {
       session.phase = 2;
+      session.session_state = 'investigating';
     }
     session.updated_at = new Date();
     this.saveSession(session);
@@ -832,12 +846,19 @@ export class CollaborativeSessionStore {
 
   /**
    * Get uncheckpointed main questions - for Phase 4
+   * If agentId is provided, returns questions that agent hasn't checkpointed.
+   * Otherwise returns questions with no checkpoints from any agent.
    */
-  getUncheckpointedMainQuestions(sessionId: string): MainQuestion[] {
+  getUncheckpointedMainQuestions(sessionId: string, agentId?: string): MainQuestion[] {
     const session = this.getSession(sessionId, true);
-    return session.merged_questions.filter(q => 
-      !session.agent_checkpoints.some(cp => cp.main_question_id === q.id)
-    );
+    return session.merged_questions.filter(q => {
+      if (agentId) {
+        return !session.agent_checkpoints.some(
+          cp => cp.main_question_id === q.id && cp.agent_id === agentId
+        );
+      }
+      return !session.agent_checkpoints.some(cp => cp.main_question_id === q.id);
+    });
   }
 
   /**
@@ -866,7 +887,7 @@ export class CollaborativeSessionStore {
     }));
 
     session.sub_question_pool.push(...createdSubQuestions);
-    mainQuestion.sub_question_ids = createdSubQuestions.map(sq => sq.id);
+    mainQuestion.sub_question_ids.push(...createdSubQuestions.map(sq => sq.id));
     session.updated_at = new Date();
     this.saveSession(session);
     return createdSubQuestions;

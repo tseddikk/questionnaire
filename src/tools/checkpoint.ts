@@ -135,7 +135,7 @@ export function checkpoint(input: CheckpointInput): CheckpointResponse {
     return {
       status: 'checkpoint_accepted',
       main_question_index: updatedSession.merged_questions.findIndex(q => q.id === input.main_question_id),
-      questions_remaining: collaborativeStore.getUncheckpointedMainQuestions(session.session_id).length,
+      questions_remaining: collaborativeStore.getUncheckpointedMainQuestions(session.session_id, input.agent_id).length,
       cross_cutting_signals: [],
     };
   }
@@ -168,7 +168,7 @@ export function checkpoint(input: CheckpointInput): CheckpointResponse {
   const mainQuestionIndex = updatedSession.merged_questions.findIndex(
     q => q.id === input.main_question_id
   );
-  const remaining = collaborativeStore.getUncheckpointedMainQuestions(session.session_id);
+  const remaining = collaborativeStore.getUncheckpointedMainQuestions(session.session_id, input.agent_id);
 
   return {
     status: 'checkpoint_accepted',

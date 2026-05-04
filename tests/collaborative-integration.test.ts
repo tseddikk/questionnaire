@@ -946,6 +946,22 @@ describe('Multi-Agent Collaborative Protocol', () => {
       expect(confirmResult.status).toBe('accepted');
       expect(confirmResult.finding_status).toBe('confirmed');
 
+      // Agent B extends Agent A's third finding
+      const extendResult = reactToFinding({
+        session_id: initResult.session_id,
+        agent_id: AGENT_B,
+        finding_id: findingIds[2],
+        reaction_type: 'extend',
+        content: 'This also affects the retry logic.',
+        evidence: {
+          file_path: '/src/retry.ts',
+          line_start: 5,
+          line_end: 15,
+          snippet: 'retry(3); // no backoff',
+        },
+      });
+      expect(extendResult.status).toBe('accepted');
+
       // Agent A checkpoints the first main question
       const cpResult = checkpoint({
         session_id: initResult.session_id,
@@ -979,15 +995,29 @@ describe('Multi-Agent Collaborative Protocol', () => {
       });
       expect(adjResult.status).toBe('adjudication_recorded');
 
-      // Agent B submits findings for remaining sub-questions to enable checkpointing
+      // Agent A submits findings for remaining questions; Agent B reacts to enable checkpoint
       for (let i = 1; i < questionIds.length; i++) {
         const qSubIds = subQuestionIds.slice(i * 3, (i + 1) * 3);
         for (const sqId of qSubIds) {
-          submitFinding({
+          const fResult = submitFinding({
+            session_id: initResult.session_id,
+            agent_id: AGENT_A,
+            sub_question_id: sqId,
+            finding: makeFinding('Agent A investigation'),
+          }) as any;
+          // Agent B extends to satisfy checkpoint requirement
+          reactToFinding({
             session_id: initResult.session_id,
             agent_id: AGENT_B,
-            sub_question_id: sqId,
-            finding: makeFinding('Agent B found issues here too'),
+            finding_id: fResult.finding_id,
+            reaction_type: 'extend',
+            content: 'Agent B verified this finding.',
+            evidence: {
+              file_path: '/src/verify.ts',
+              line_start: 1,
+              line_end: 5,
+              snippet: '// verified',
+            },
           });
         }
 
@@ -1047,25 +1077,27 @@ describe('Multi-Agent Collaborative Protocol', () => {
       agent_id: AGENT_A,
       main_question_id: qId,
     });
-    // Agent B reacts to first finding of each question to enable checkpoint via reactions
+    // Agent B reacts to all findings for this question to enable checkpoint via reactions
     const session = collaborativeStore.getSession(sessionId);
     const questionIdx = questionIds.indexOf(qId);
-    const firstSqId = subQuestionIds[questionIdx * 3];
-    const firstFinding = session.findings.find(f => f.sub_question_id === firstSqId);
-    if (firstFinding) {
-      reactToFinding({
-        session_id: sessionId,
-        agent_id: AGENT_B,
-        finding_id: firstFinding.finding_id,
-        reaction_type: 'extend',
-        content: 'Agent B extending for checkpoint eligibility',
-        evidence: {
-          file_path: '/src/guard.ts',
-          line_start: 1,
-          line_end: 5,
-          snippet: '// guard evidence',
-        },
-      });
+    const qSubIds = subQuestionIds.slice(questionIdx * 3, (questionIdx + 1) * 3);
+    for (const sqId of qSubIds) {
+      const finding = session.findings.find(f => f.sub_question_id === sqId);
+      if (finding) {
+        reactToFinding({
+          session_id: sessionId,
+          agent_id: AGENT_B,
+          finding_id: finding.finding_id,
+          reaction_type: 'extend',
+          content: 'Agent B extending for checkpoint eligibility',
+          evidence: {
+            file_path: '/src/guard.ts',
+            line_start: 1,
+            line_end: 5,
+            snippet: '// guard evidence',
+          },
+        });
+      }
     }
     checkpoint({
       session_id: sessionId,

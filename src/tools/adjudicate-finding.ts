@@ -46,8 +46,8 @@ export function adjudicateFinding(input: AdjudicateFindingInput): AdjudicateFind
     throw new SynthesizerOnlyError('adjudicate_finding', session.synthesizer, input.agent_id);
   }
 
-  const coverage = session.investigation_coverage?.get(input.finding_id);
-  const currentStatus = coverage?.status || 'unknown';
+  const finding = session.findings?.find(f => f.finding_id === input.finding_id);
+  const currentStatus = finding ? 'submitted' : 'unknown';
   if (!session.contested_findings.includes(input.finding_id)) {
     throw new FindingNotContestedError('adjudicate_finding', input.finding_id, currentStatus);
   }
