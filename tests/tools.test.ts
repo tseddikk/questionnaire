@@ -6,9 +6,9 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { sessionStore } from '../src/state/session-store.js';
 import { collaborativeStore, setRegistryPath } from '../src/state/collaborative-store.js';
 import { initializeAudit } from '../src/tools/initialize-audit.js';
+import { joinSession } from '../src/tools/join-session.js';
 import { submitObservations } from '../src/tools/submit-observations.js';
 import { submitQuestion } from '../src/tools/submit-question.js';
 import { submitSubQuestions } from '../src/tools/submit-sub-questions.js';
@@ -24,9 +24,9 @@ describe('MCP Tools', () => {
     repoPath = mkdtempSync(join(tmpdir(), 'questionnaire-test-repo-'));
     setRegistryPath(join(repoPath, 'test-registry.json'));
     // Clear singleton stores between tests
-    const sessions = sessionStore.getAllSessions();
+    const sessions = collaborativeStore.getAllSessions();
     for (const session of sessions) {
-      sessionStore.deleteSession(session.session_id);
+      collaborativeStore.deleteSession(session.session_id);
     }
     collaborativeStore.clearMemoryOnly();
   });
@@ -72,6 +72,7 @@ describe('MCP Tools', () => {
       // Initialize first
       const initResult = await initializeAudit({
         repo_path: repoPath,
+        agent_id: 'test-agent',
         domain: 'security',
         depth: 'standard',
       });
@@ -156,6 +157,12 @@ describe('MCP Tools', () => {
         session_id: initResult.session_id,
         agent_id: 'test-agent',
         observations,
+      });
+
+      joinSession({
+        session_id: initResult.session_id,
+        agent_id: 'test-agent-2',
+        repo_path: repoPath,
       });
 
       const result = submitObservations({
@@ -253,10 +260,9 @@ describe('MCP Tools', () => {
 
       const result = submitQuestion(input);
 
-      // New error response format returns status: 'error' with failures array
-      expect(result.status).toBe('error');
-      expect(result.code).toBe('MULTIPLE_VALIDATION_FAILURES');
-      expect(result.failures?.some(f => f.code === 'BINARY_QUESTION')).toBe(true);
+      // Rejected response format
+      expect(result.status).toBe('rejected');
+      expect(result.reason).toBe('BINARY_QUESTION');
     });
   });
 
@@ -292,8 +298,8 @@ describe('MCP Tools', () => {
             domain_pattern: 'VALIDATION_BYPASS',
           },
         }) as any;
-        if (qResult.status === 'error') {
-           throw new Error(qResult.message);
+        if (qResult.status === 'rejected') {
+           throw new Error(qResult.guidance || 'Question rejected');
         }
         questionIds.push(qResult.question_id);
       }

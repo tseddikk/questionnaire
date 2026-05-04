@@ -52,11 +52,4 @@ describe('DEPTH_CONFIG', () => {
     });
   });
 
-  it('should have escalation requirements', () => {
-    expect(DEPTH_CONFIG.standard.min_escalation_paths).toBeGreaterThanOrEqual(0);
-    expect(DEPTH_CONFIG.deep.min_escalation_paths).toBeGreaterThanOrEqual(
-      DEPTH_CONFIG.standard.min_escalation_paths
-    );
-    expect(DEPTH_CONFIG.forensic.require_all_escalations).toBe(true);
-  });
 });

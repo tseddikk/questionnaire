@@ -59,43 +59,6 @@ export async function initializeAudit(input: InitializeAuditInput): Promise<Init
   };
 }
 
-/**
- * Validate input (basic validation before processing)
- */
-export function validateInitializeInput(
-  input: unknown
-): input is InitializeAuditInput {
-  if (!input || typeof input !== 'object') {
-    return false;
-  }
-  
-  const requiredFields = ['repo_path', 'domain', 'depth'];
-  for (const field of requiredFields) {
-    if (!(field in input)) {
-      return false;
-    }
-  }
-  
-  const validDomains = [
-    'security', 'performance', 'architecture',
-    'data_integrity', 'observability', 'compliance'
-  ];
-  
-  const validDepths = ['standard', 'deep', 'forensic'];
-  
-  const typedInput = input as { domain: string; depth: string };
-  
-  if (!validDomains.includes(typedInput.domain)) {
-    return false;
-  }
-  
-  if (!validDepths.includes(typedInput.depth)) {
-    return false;
-  }
-  
-  return true;
-}
-
 // ============================================================================
 // MCP Tool Definition
 // ============================================================================

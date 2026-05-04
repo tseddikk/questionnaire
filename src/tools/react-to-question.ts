@@ -8,6 +8,7 @@
  */
 
 import { collaborativeStore } from '../state/collaborative-store.js';
+import { UnknownMainQuestionError } from '../state/errors.js';
 import { v4 as uuidv4 } from 'uuid';
 import type { QuestionReaction } from '../types/domain.js';
 
@@ -20,19 +21,40 @@ export interface ReactToQuestionInput {
 }
 
 export interface ReactToQuestionResponse {
-  status: 'accepted';
-  reaction_id: string;
+  status: 'accepted' | 'rejected';
+  reaction_id?: string;
+  reason?: string;
+  guidance?: string;
 }
 
 export function reactToQuestion(input: ReactToQuestionInput): ReactToQuestionResponse {
   const session = collaborativeStore.getSession(input.session_id);
 
-  // Validate question exists
+  const isMember = session.agents.some(a => a.agent_id === input.agent_id);
+  if (!isMember) {
+    return {
+      status: 'rejected',
+      reason: 'AGENT_NOT_IN_SESSION',
+      guidance: `Agent ${input.agent_id} is not a member of this session. Use join_session first.`,
+    };
+  }
+
   const questionExists = session.merged_questions.some(
     q => q.id === input.question_id
   );
   if (!questionExists) {
-    throw new Error(`INVALID_QUESTION_ID: Question ${input.question_id} not found in session. Use list_questions to see valid IDs.`);
+    throw new UnknownMainQuestionError('react_to_question', input.question_id, session.merged_questions.map(q => q.id));
+  }
+
+  const ownQuestion = session.merged_questions.find(
+    q => q.id === input.question_id && q.author_agent_id === input.agent_id
+  );
+  if (ownQuestion && input.reaction_type === 'endorse') {
+    return {
+      status: 'rejected',
+      reason: 'CANNOT_ENDORSE_OWN_QUESTION',
+      guidance: 'You cannot endorse your own question. Endorsement requires independent review.',
+    };
   }
 
   const reaction: QuestionReaction = {

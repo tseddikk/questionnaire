@@ -402,9 +402,9 @@ interface SubQuestionConfig {
   requireEscalation: boolean;
 }
 
-const DEPTH_CONFIG: Record<AuditDepth, SubQuestionConfig> = {
+const SUB_QUESTION_DEPTH_CONFIG: Record<AuditDepth, SubQuestionConfig> = {
   standard: { min: 3, max: 4, requireEscalation: false },
-  deep: { min: 4, max: 5, requireEscalation: true },
+  deep: { min: 4, max: 5, requireEscalation: false },
   forensic: { min: 5, max: 6, requireEscalation: true },
 };
 
@@ -418,7 +418,7 @@ export function validateSubQuestions(
   depth: AuditDepth
 ): ValidationResult {
   const failures: ValidationFailure[] = [];
-  const config = DEPTH_CONFIG[depth];
+  const config = SUB_QUESTION_DEPTH_CONFIG[depth];
 
   // Check count
   if (subQuestions.length < config.min || subQuestions.length > config.max) {

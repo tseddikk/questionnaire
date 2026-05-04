@@ -122,19 +122,4 @@ export function assertObservationsValid(
   }
 }
 
-/**
- * Get a human-readable error message for validation failures
- */
-export function getObservationValidationMessage(
-  result: ObservationValidationResult
-): string {
-  if (result.valid) {
-    return 'All observations are valid.';
-  }
-  
-  const errorMessages = result.errors.map(
-    e => `- ${e.type}[${e.index}]: ${e.message}`
-  );
-  
-  return `Observation validation failed:\n${errorMessages.join('\n')}`;
-}
+

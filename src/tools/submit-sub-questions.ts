@@ -25,6 +25,15 @@ export function submitSubQuestions(
   // Get session
   const session = collaborativeStore.getSession(input.session_id);
 
+  const isMember = session.agents.some(a => a.agent_id === input.agent_id);
+  if (!isMember) {
+    return {
+      status: 'rejected',
+      reason: 'AGENT_NOT_IN_SESSION',
+      guidance: `Agent ${input.agent_id} is not a member of this session. Use join_session first.`,
+    };
+  }
+
   // Verify main question exists
   const mainQuestion = collaborativeStore.getMainQuestion(
     session.session_id,
@@ -36,6 +45,15 @@ export function submitSubQuestions(
       status: 'rejected',
       reason: 'QUESTION_NOT_FOUND',
       guidance: `Main question ${input.main_question_id} not found in this session.`,
+    };
+  }
+
+  // Prevent re-decomposing already-decomposed questions
+  if (mainQuestion.sub_question_ids && mainQuestion.sub_question_ids.length > 0) {
+    return {
+      status: 'rejected',
+      reason: 'ALREADY_DECOMPOSED',
+      guidance: `Main question ${input.main_question_id} already has ${mainQuestion.sub_question_ids.length} sub-question(s). Use list_sub_questions to view them.`,
     };
   }
 
@@ -86,17 +104,6 @@ export function submitSubQuestions(
     main_question_id: input.main_question_id,
     sub_question_ids: createdSubQuestions.map(sq => sq.id),
   };
-}
-
-/**
- * Get remaining main questions that need sub-questions
- */
-export function getRemainingMainQuestions(sessionId: string): string[] {
-  const session = collaborativeStore.getSession(sessionId);
-  if (!session) {return [];}
-  return session.merged_questions
-    .filter(mq => mq.sub_question_ids.length === 0)
-    .map(mq => mq.id);
 }
 
 // ============================================================================

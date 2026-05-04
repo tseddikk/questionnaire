@@ -15,7 +15,7 @@ import {
 import { validateMainQuestion } from '../validation/question-validator.js';
 import { DEPTH_CONFIG } from '../types/domain.js';
 import type { SubmitQuestionInput } from '../types/schemas.js';
-import type { QuestionResponse, MainQuestion, ErrorResponse } from '../types/domain.js';
+import type { QuestionResponse, MainQuestion } from '../types/domain.js';
 
 // ============================================================================
 // Tool Implementation
@@ -24,11 +24,20 @@ import type { QuestionResponse, MainQuestion, ErrorResponse } from '../types/dom
 /**
  * Submit a main question for validation and storage
  */
-export function submitQuestion(input: SubmitQuestionInput): QuestionResponse | ErrorResponse {
+export function submitQuestion(input: SubmitQuestionInput): QuestionResponse {
   const toolName = 'submit_question';
 
   // Get session
   const session = collaborativeStore.getSession(input.session_id);
+
+  const isMember = session.agents.some(a => a.agent_id === input.agent_id);
+  if (!isMember) {
+    return {
+      status: 'rejected',
+      reason: 'AGENT_NOT_IN_SESSION' as any,
+      guidance: `Agent ${input.agent_id} is not a member of this session. Use join_session first.`,
+    };
+  }
 
   // Check if we've reached max questions
   const config = DEPTH_CONFIG[session.depth];
@@ -47,13 +56,11 @@ export function submitQuestion(input: SubmitQuestionInput): QuestionResponse | E
   // If invalid, return multi-failure error response
   if (!validationResult.valid && validationResult.failures) {
     return {
-      status: 'error',
-      code: 'MULTIPLE_VALIDATION_FAILURES',
-      phase: 2,
-      tool: toolName,
-      message: `Question validation failed with ${validationResult.failures.length} issue(s).`,
-      failures: validationResult.failures,
-      action: 'Fix all failures listed above and resubmit. Do not resubmit until all are resolved.',
+      status: 'rejected',
+      reason: validationResult.failures[0].code as any,
+      guidance: validationResult.failures.length > 1
+        ? `Fix all ${validationResult.failures.length} failures listed in the response.`
+        : validationResult.failures[0].action,
     };
   }
 
@@ -79,31 +86,6 @@ export function submitQuestion(input: SubmitQuestionInput): QuestionResponse | E
     question_id: question.id,
     questions_accepted_so_far: newCount,
   };
-}
-
-/**
- * Check if Phase 2 is complete (min questions reached)
- */
-export function isPhase2Complete(sessionId: string): boolean {
-  try {
-    const session = collaborativeStore.getSession(sessionId);
-    const config = DEPTH_CONFIG[session.depth];
-    const count = collaborativeStore.getMainQuestionCount(sessionId);
-    return count >= config.min_main_questions;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Advance to Phase 3 if minimum questions reached
- */
-export function maybeAdvanceToPhase3(sessionId: string): boolean {
-  if (isPhase2Complete(sessionId)) {
-    collaborativeStore.advancePhase(sessionId, 3);
-    return true;
-  }
-  return false;
 }
 
 // ============================================================================

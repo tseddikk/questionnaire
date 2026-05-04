@@ -18,7 +18,8 @@ import type {
   Finding,
   AgentFinding,
   CheckpointRecord,
-  AgentCheckpoint
+  AgentCheckpoint,
+  EscalationFinding,
 } from '../types/domain.js';
 
 // ============================================================================
@@ -272,25 +273,43 @@ export function finalizeReport(input: FinalizeReportInput): FinalizeResponse {
   let heatMapAlignment = null;
   if (session.heat_map) {
     const criticalFiles = session.heat_map.entries.filter(e => e.bucket === 'critical');
-    const criticalWithFindings = criticalFiles.filter(cf =>
-      session.findings.some(f => f.evidence?.file_path?.includes(cf.file))
-    );
+  const criticalWithFindings = criticalFiles.filter(cf =>
+        session.findings.some(f => f.evidence?.file_path === cf.file || f.evidence?.file_path?.endsWith('/' + cf.file))
+      );
 
-    heatMapAlignment = {
-      critical_files_with_findings: `${criticalWithFindings.length}/${criticalFiles.length}`,
-      critical_files_uninvestigated: criticalFiles
-        .filter(cf => !session.findings.some(f => f.evidence?.file_path?.includes(cf.file)))
+      heatMapAlignment = {
+        critical_files_with_findings: `${criticalWithFindings.length}/${criticalFiles.length}`,
+        critical_files_uninvestigated: criticalFiles
+          .filter(cf => !session.findings.some(f => f.evidence?.file_path === cf.file || f.evidence?.file_path?.endsWith('/' + cf.file)))
         .map(e => e.file),
       low_bucket_files_investigated: 0, // Would need to track
-      heat_map_predictive_accuracy: 'high', // Placeholder
+      heat_map_predictive_accuracy:
+        criticalFiles.length === 0
+          ? 'n/a'
+          : criticalWithFindings.length >= criticalFiles.length
+            ? 'high'
+            : criticalWithFindings.length >= criticalFiles.length / 2
+              ? 'medium'
+              : 'low',
     };
   }
+
+  const escalations: EscalationFinding[] = session.findings
+    .filter(f => f.escalation_finding)
+    .map(f => ({
+      id: `esc-${f.finding_id || f.id}`,
+      parent_finding_id: f.finding_id || f.id,
+      question: f.sub_question_id,
+      answer: f.escalation_finding!,
+      evidence: f.evidence,
+      file_path: f.evidence?.file_path || '',
+    }));
 
   return {
     status: 'report_authorized',
     findings_summary: findingsSummary,
     cross_cutting_concerns: crossCuttingConcerns,
-    escalations: [],
+    escalations,
     heat_map_alignment: heatMapAlignment,
     adjudications: session.adjudications,
     unresolved_findings: session.unresolved_findings,

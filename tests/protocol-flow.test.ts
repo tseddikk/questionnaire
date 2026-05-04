@@ -135,6 +135,7 @@ describe('Complete Protocol Flow', () => {
       const repoPath = getTestRepo();
       const initResult = await initializeAudit({
         repo_path: repoPath,
+        agent_id: 'test-agent',
         domain: 'security',
         depth: 'standard',
       });
@@ -310,9 +311,8 @@ describe('Complete Protocol Flow', () => {
       };
 
       const result = submitQuestion(input);
-      expect(result.status).toBe('error');
-      expect(result.code).toBe('MULTIPLE_VALIDATION_FAILURES');
-      expect(result.failures?.some(f => f.code === 'BINARY_QUESTION')).toBe(true);
+      expect(result.status).toBe('rejected');
+      expect(result.reason).toBe('BINARY_QUESTION');
       
       // Clean up
       collaborativeStore.deleteSession(initResult.session_id);
@@ -353,8 +353,8 @@ describe('Complete Protocol Flow', () => {
       };
 
       const result = submitQuestion(input);
-      expect(result.status).toBe('error');
-      expect(result.failures?.some(f => f.code === 'MISSING_TARGET_FILES')).toBe(true);
+      expect(result.status).toBe('rejected');
+      expect(result.reason).toBe('MISSING_TARGET_FILES');
       
       // Clean up
       collaborativeStore.deleteSession(initResult.session_id);

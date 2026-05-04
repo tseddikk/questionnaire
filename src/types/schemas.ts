@@ -168,7 +168,7 @@ export const SubmitQuestionInputSchema = z.object({
 
 export const SubQuestionInputSchema = z.object({
   text: z.string().min(10, 'Sub-question must be at least 10 characters'),
-  target_files: z.array(z.string().min(1)).max(3, 'Maximum 3 target files allowed'),
+  target_files: z.array(z.string().min(1)).min(1, 'At least one target file required').max(3, 'Maximum 3 target files allowed'),
   pass_criteria: z.string().min(10, 'Pass criteria required'),
   fail_criteria: z.string().min(10, 'Fail criteria required'),
   evidence_pattern: z.string().min(10, 'Evidence pattern required'),

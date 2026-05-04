@@ -36,7 +36,9 @@ export function discoverSessions(input: DiscoverSessionsInput): DiscoverSessions
   const sessions = collaborativeStore.discoverSessions(input.repo_path);
 
   return {
-    active_sessions: sessions.map(s => ({
+    active_sessions: sessions
+      .filter(s => s.session_state !== 'finalized' && s.session_state !== 'archived_incomplete')
+      .map(s => ({
       session_id: s.session_id,
       repo: s.repo_path,
       phase: s.phase,

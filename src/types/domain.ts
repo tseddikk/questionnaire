@@ -30,17 +30,36 @@ export type Confidence = 'high' | 'medium' | 'low';
 export type RejectionReason =
   | 'FORBIDDEN_PATTERN'
   | 'MISSING_TARGET_FILES'
+  | 'TOO_MANY_TARGET_FILES'
   | 'BINARY_QUESTION'
   | 'MISSING_SUSPICION_RATIONALE'
+  | 'MISSING_EDGE_CASE'
   | 'HAPPY_PATH_ONLY'
+  | 'MISSING_PASS_CRITERIA'
+  | 'MISSING_FAIL_CRITERIA'
+  | 'MISSING_EVIDENCE_PATTERN'
+  | 'MISSING_ESCALATION_QUESTION'
   | 'PHASE_VIOLATION'
   | 'MISSING_FILE_CITATION'
+  | 'INVALID_EVIDENCE_STATE'
+  | 'MISSING_EVIDENCE'
+  | 'INVALID_LINE_START'
+  | 'INVALID_LINE_RANGE'
+  | 'MISSING_SNIPPET'
+  | 'INVALID_VERDICT'
+  | 'INVALID_SEVERITY'
+  | 'MISSING_ANSWER'
+  | 'MISSING_EVIDENCE_EXPLANATION'
+  | 'SEVERITY_MISMATCH'
   | 'ESCALATION_REQUIRED'
   | 'CHECKPOINT_INCOMPLETE'
   | 'SUB_QUESTION_COUNT_VIOLATION'
   | 'QUESTION_NOT_FOUND'
+  | 'ALREADY_DECOMPOSED'
   | 'SUB_QUESTION_NOT_FOUND'
-  | 'DUPLICATE_FINDING';
+  | 'DUPLICATE_FINDING'
+  | 'AGENT_NOT_IN_SESSION'
+  | 'SESSION_NOT_ACTIVE';
 
 export type QuestionPattern =
   | 'ASYNC_FAILURE'
@@ -430,18 +449,9 @@ export interface CollaborativeSession {
 
   // Report
   report: Report | null;
-}
 
-export interface CollaborativeFinalizeResponse {
-  status: 'report_authorized';
-  findings_summary: FindingSummary;
-  cross_cutting_concerns: CrossCuttingConcern[];
-  escalations: EscalationFinding[];
-  adjudications: AdjudicationRecord[];
-  unresolved_findings: UnresolvedFinding[];
-  heat_map_alignment: HeatMapAlignment;
-  report_schema: ReportSchema;
-  investigator_stats: InvestigatorStats[];
+  // Archive
+  archive_reason: string | null;
 }
 
 // ============================================================================
@@ -477,9 +487,11 @@ export interface InitializeResponse {
 }
 
 export interface ObservationsResponse {
-  status: 'accepted';
-  current_phase: number;
-  observations_count: number;
+  status: 'accepted' | 'rejected';
+  current_phase?: number;
+  observations_count?: number;
+  reason?: string;
+  guidance?: string;
 }
 
 export interface QuestionResponse {
@@ -508,42 +520,6 @@ export interface FindingResponse {
 // ============================================================================
 // Error Response Contract Types
 // ============================================================================
-
-export interface ValidationFailure {
-  code: string;
-  field: string;
-  submitted_value: unknown;
-  expected: string;
-  action: string;
-}
-
-export interface ErrorDetail {
-  field: string;
-  submitted_value: unknown;
-  expected: string;
-}
-
-export interface SessionStateContext {
-  current_phase?: number;
-  current_phase_name?: string;
-  main_questions_accepted?: number;
-  sub_question_sets_submitted?: number;
-  sub_question_sets_remaining?: number;
-  next_required_tool?: string;
-  next_required_action?: string;
-}
-
-export interface ErrorResponse {
-  status: 'error';
-  code: string;
-  phase?: number;
-  tool: string;
-  message: string;
-  detail?: ErrorDetail;
-  failures?: ValidationFailure[];
-  session_state?: SessionStateContext;
-  action: string;
-}
 
 export interface CheckpointResponse {
   status: 'checkpoint_accepted' | 'incomplete';
@@ -635,8 +611,6 @@ export interface DepthConfig {
   max_main_questions: number;
   min_sub_questions: number;
   max_sub_questions: number;
-  min_escalation_paths: number;
-  require_all_escalations: boolean;
 }
 
 export const DEPTH_CONFIG: Record<AuditDepth, DepthConfig> = {
@@ -645,24 +619,18 @@ export const DEPTH_CONFIG: Record<AuditDepth, DepthConfig> = {
     max_main_questions: 7,
     min_sub_questions: 3,
     max_sub_questions: 4,
-    min_escalation_paths: 1,
-    require_all_escalations: false,
   },
   deep: {
     min_main_questions: 5,
     max_main_questions: 7,
     min_sub_questions: 4,
     max_sub_questions: 5,
-    min_escalation_paths: 2,
-    require_all_escalations: false,
   },
   forensic: {
     min_main_questions: 5,
     max_main_questions: 7,
     min_sub_questions: 5,
     max_sub_questions: 6,
-    min_escalation_paths: 1,
-    require_all_escalations: true,
   },
 };
 

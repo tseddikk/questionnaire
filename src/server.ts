@@ -1,7 +1,7 @@
 /**
  * MCP Server Implementation
- * 
- * Sets up the Model Context Protocol server with all 7 tools.
+ *
+ * Sets up the Model Context Protocol server with all 20 tools.
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
@@ -108,8 +108,8 @@ async function handleToolCall(name: string, args: unknown): Promise<unknown> {
       // Collaborative tools
       case 'discover_sessions':
         return discoverSessions(args as { repo_path: string });
-case 'join_session':
-      return joinSession(args as { session_id: string; agent_id: string; repo_path: string });
+      case 'join_session':
+        return joinSession(args as { session_id: string; agent_id: string; repo_path: string });
       case 'react_to_finding':
         return reactToFinding(args as { session_id: string; agent_id: string; finding_id: string; reaction_type: 'confirm' | 'challenge' | 'extend'; content: string; evidence?: { file_path: string; line_start: number; line_end: number; snippet: string } | null });
       case 'react_to_question':
@@ -122,7 +122,7 @@ case 'join_session':
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         return adjudicateFinding(args as unknown as Parameters<typeof adjudicateFinding>[0]);
       case 'archive_session':
-        return archiveSession(args as { session_id: string; reason: string });
+        return archiveSession(args as { session_id: string; agent_id: string; reason: string });
       case 'get_workflow_guide':
         return getWorkflowGuide();
       case 'list_questions':
@@ -137,10 +137,10 @@ case 'join_session':
     }
   } catch (error) {
     // Handle known error types
-      if (error instanceof AuditError) {
-        return error.toJSON();
-      }
-    
+    if (error instanceof AuditError) {
+      return error.toJSON();
+    }
+
     // Handle Zod validation errors
     if (error instanceof ZodError) {
       const issues = error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join('; ');

@@ -28,6 +28,15 @@ export function submitObservations(
   // Get session from collaborative store
   const session = collaborativeStore.getSession(input.session_id);
 
+  const isMember = session.agents.some(a => a.agent_id === input.agent_id);
+  if (!isMember) {
+    return {
+      status: 'rejected',
+      reason: 'AGENT_NOT_IN_SESSION',
+      guidance: `Agent ${input.agent_id} is not a member of this session. Use join_session first.`,
+    };
+  }
+
   // Validate observations have file citations
   const validationResult = validateObservations(input.observations);
   assertObservationsValid(validationResult);

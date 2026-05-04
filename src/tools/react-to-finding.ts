@@ -57,7 +57,20 @@ export function reactToFinding(input: ReactToFindingInput): ReactToFindingRespon
   if (finding.agent_id === input.agent_id) {
     return {
       status: 'rejected',
-      reason: 'Cannot react to own finding',
+      reason: 'SELF_REACTION',
+      guidance: 'You cannot react to your own findings. If you want to extend your finding with new evidence, submit a new finding referencing the original.',
+    };
+  }
+
+  // Cannot react twice to the same finding
+  const existingReaction = session.finding_reactions.find(
+    r => r.finding_id === input.finding_id && r.agent_id === input.agent_id
+  );
+  if (existingReaction) {
+    return {
+      status: 'rejected',
+      reason: 'DUPLICATE_REACTION',
+      guidance: `You already reacted to finding ${input.finding_id}. Use a different finding or extend via submit_finding.`,
     };
   }
 
@@ -91,12 +104,17 @@ export function reactToFinding(input: ReactToFindingInput): ReactToFindingRespon
 
   collaborativeStore.addFindingReaction(input.session_id, reaction);
 
-  // Determine finding status
+  // Determine finding status from ALL reactions to this finding
+  const updatedSession = collaborativeStore.getSession(input.session_id);
+  const allReactions = updatedSession.finding_reactions.filter(r => r.finding_id === input.finding_id);
+  const hasChallenge = allReactions.some(r => r.reaction_type === 'challenge');
+  const allConfirm = allReactions.every(r => r.reaction_type === 'confirm');
+
   let finding_status: 'confirmed' | 'contested' | 'extended';
-  if (input.reaction_type === 'confirm') {
-    finding_status = 'confirmed';
-  } else if (input.reaction_type === 'challenge') {
+  if (hasChallenge) {
     finding_status = 'contested';
+  } else if (allConfirm && allReactions.length > 0) {
+    finding_status = 'confirmed';
   } else {
     finding_status = 'extended';
   }

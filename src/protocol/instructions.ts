@@ -114,7 +114,6 @@ Focus Areas:
 Question Patterns (use these):
 1. INVARIANT_MISSING: What failure modes produce no logs, metrics, or alerts?
 2. ASYNC_FAILURE: What async operations have no timeout or failure notification?
-3. IMPLICIT_MUTATION: What state changes are not logged or monitored?
 
 Investigation Priority:
 - Error handling paths

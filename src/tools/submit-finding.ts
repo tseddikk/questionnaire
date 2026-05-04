@@ -9,6 +9,7 @@
 
 import { collaborativeStore } from '../state/collaborative-store.js';
 import { validateFindingForSubmission } from '../validation/finding-validator.js';
+import { FindingRejectedError } from '../state/errors.js';
 import type { SubmitFindingInput } from '../types/schemas.js';
 import type { FindingResponse, Finding } from '../types/domain.js';
 
@@ -22,6 +23,15 @@ import type { FindingResponse, Finding } from '../types/domain.js';
 export function submitFinding(input: SubmitFindingInput): FindingResponse {
   // Get session
   const session = collaborativeStore.getSession(input.session_id);
+
+  const isMember = session.agents.some(a => a.agent_id === input.agent_id);
+  if (!isMember) {
+    return {
+      status: 'rejected',
+      reason: 'AGENT_NOT_IN_SESSION',
+      guidance: `Agent ${input.agent_id} is not a member of this session. Use join_session first.`,
+    };
+  }
 
   // Verify sub-question exists
   const subQuestion = collaborativeStore.getSubQuestion(
@@ -42,8 +52,8 @@ export function submitFinding(input: SubmitFindingInput): FindingResponse {
     return {
       status: 'rejected',
       reason: 'DUPLICATE_FINDING',
-      guidance: `A finding already exists for sub-question ${input.sub_question_id}. ` +
-        'Each sub-question can only have one finding.',
+    guidance: `A finding already exists for sub-question ${input.sub_question_id}. ` +
+      'Use react_to_finding (confirm/challenge/extend) to contribute to the existing finding instead.',
     };
   }
   
@@ -64,10 +74,17 @@ export function submitFinding(input: SubmitFindingInput): FindingResponse {
   try {
     validateFindingForSubmission(findingInput);
   } catch (error) {
+    if (error instanceof FindingRejectedError) {
+      return {
+        status: 'rejected',
+        reason: error.code as FindingResponse['reason'],
+        guidance: error.action || error.message,
+      };
+    }
     if (error instanceof Error) {
       return {
         status: 'rejected',
-        reason: 'ESCALATION_REQUIRED',
+        reason: 'VALIDATION_ERROR' as FindingResponse['reason'],
         guidance: error.message,
       };
     }

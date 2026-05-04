@@ -8,6 +8,7 @@
  */
 
 import { collaborativeStore } from '../state/collaborative-store.js';
+import { SynthesizerOnlyError, FindingNotContestedError } from '../state/errors.js';
 import { v4 as uuidv4 } from 'uuid';
 import type { AdjudicationRecord, MergedFinding } from '../types/domain.js';
 
@@ -22,18 +23,49 @@ export interface AdjudicateFindingInput {
   unresolved_detail?: string | null;
 }
 
-export interface AdjudicateFindingResponse {
+export interface AdjudicateFindingAcceptedResponse {
   status: 'adjudication_recorded';
   adjudication_id: string;
   remaining_contested: number;
 }
 
+export interface AdjudicateFindingRejectedResponse {
+  status: 'rejected';
+  reason: string;
+  guidance: string;
+}
+
+export type AdjudicateFindingResponse =
+  | AdjudicateFindingAcceptedResponse
+  | AdjudicateFindingRejectedResponse;
+
 export function adjudicateFinding(input: AdjudicateFindingInput): AdjudicateFindingResponse {
   const session = collaborativeStore.getSession(input.session_id);
 
-  // Verify caller is synthesizer
   if (session.synthesizer !== input.agent_id) {
-    throw new Error('Only the Synthesizer can adjudicate findings');
+    throw new SynthesizerOnlyError('adjudicate_finding', session.synthesizer, input.agent_id);
+  }
+
+  const coverage = session.investigation_coverage?.get(input.finding_id);
+  const currentStatus = coverage?.status || 'unknown';
+  if (!session.contested_findings.includes(input.finding_id)) {
+    throw new FindingNotContestedError('adjudicate_finding', input.finding_id, currentStatus);
+  }
+
+  if (input.ruling === 'unresolved' && !input.unresolved_detail) {
+    return {
+      status: 'rejected',
+      reason: 'MISSING_UNRESOLVED_DETAIL',
+      guidance: 'When ruling is "unresolved", you must provide unresolved_detail explaining what remains unresolved.',
+    };
+  }
+
+  if (input.ruling === 'merge' && !input.merged_finding) {
+    return {
+      status: 'rejected',
+      reason: 'MISSING_MERGED_FINDING',
+      guidance: 'When ruling is "merge", you must provide a merged_finding object combining both agents\' findings.',
+    };
   }
 
   const adjudication: AdjudicationRecord = {
@@ -49,7 +81,6 @@ export function adjudicateFinding(input: AdjudicateFindingInput): AdjudicateFind
 
   collaborativeStore.addAdjudication(input.session_id, adjudication);
 
-  // Get updated session for accurate remaining count
   const updatedSession = collaborativeStore.getSession(input.session_id);
 
   return {
@@ -66,6 +97,7 @@ export const adjudicateFindingTool = {
     type: 'object' as const,
     properties: {
       session_id: { type: 'string' as const, format: 'uuid' },
+      agent_id: { type: 'string' as const, description: 'Agent ID calling adjudicate (must be the Synthesizer)' },
       finding_id: { type: 'string' as const, format: 'uuid' },
       ruling: { type: 'string' as const, enum: ['uphold', 'merge', 'unresolved'] },
       upheld_agent: { type: 'string' as const },

@@ -10,7 +10,7 @@
  * - action: Concrete recovery instruction
  */
 
-import type { RejectionReason, AuditPhase, AuditSession, CollaborativeSession, MainQuestion } from '../types/domain.js';
+import type { RejectionReason, AuditPhase, CollaborativeSession, MainQuestion } from '../types/domain.js';
 
 // ============================================================================
 // Error Response Types
@@ -142,33 +142,6 @@ export class SessionNotFoundError extends AuditError {
   }
 }
 
-export class SessionAlreadyActiveError extends AuditError {
-  constructor(
-    tool: string,
-    activeSession: {
-      session_id: string;
-      repo: string;
-      phase: number;
-      started_by: string;
-      investigators: string[];
-    }
-  ) {
-    super({
-      message: `Cannot initialize new session while session ${activeSession.session_id} is active.`,
-      code: 'SESSION_ALREADY_ACTIVE',
-      tool,
-      detail: {
-        field: 'repo_path',
-        submitted_value: activeSession.repo,
-        expected: 'No active sessions',
-      },
-      action: `Finalize or archive session ${activeSession.session_id} (${activeSession.repo}, phase ${activeSession.phase}) before starting a new one. Current investigators: ${activeSession.investigators.join(', ')}.`,
-    });
-    this.name = 'SessionAlreadyActiveError';
-    Object.setPrototypeOf(this, SessionAlreadyActiveError.prototype);
-  }
-}
-
 export class SessionNotJoinableError extends AuditError {
   constructor(
     tool: string,
@@ -240,7 +213,7 @@ export class PhaseViolationError extends AuditError {
     tool: string,
     currentPhase: AuditPhase,
     requiredPhase: AuditPhase,
-    sessionState?: AuditSession | CollaborativeSession
+    sessionState?: CollaborativeSession
   ) {
     const currentPhaseName = getPhaseName(currentPhase);
     const nextTool = getNextRequiredTool(currentPhase);
@@ -288,7 +261,7 @@ function getNextRequiredTool(phase: AuditPhase): string {
   return tools[phase] || 'Unknown';
 }
 
-function getNextRequiredAction(phase: AuditPhase, _sessionState?: AuditSession | CollaborativeSession): string {
+function getNextRequiredAction(phase: AuditPhase, _sessionState?: CollaborativeSession): string {
   const actions: Record<number, string> = {
     0: 'Call initialize_audit to start a new session.',
     1: 'Call submit_observations with your Phase 1 findings.',
@@ -305,7 +278,7 @@ function buildSessionStateContext(
   phaseName: string,
   nextTool: string,
   nextAction: string,
-  sessionState?: AuditSession | CollaborativeSession
+  sessionState?: CollaborativeSession
 ): SessionStateContext {
   const context: SessionStateContext = {
     current_phase: currentPhase,
@@ -315,10 +288,7 @@ function buildSessionStateContext(
   };
 
   if (sessionState) {
-    const mainQuestions: MainQuestion[] = 
-      ('main_questions' in sessionState ? sessionState.main_questions : []) || 
-      ('merged_questions' in sessionState ? sessionState.merged_questions : []) || 
-      [];
+    const mainQuestions: MainQuestion[] = sessionState.merged_questions || [];
 
     context.main_questions_accepted = mainQuestions.length;
 
@@ -355,24 +325,6 @@ export class SynthesizerOnlyError extends AuditError {
     });
     this.name = 'SynthesizerOnlyError';
     Object.setPrototypeOf(this, SynthesizerOnlyError.prototype);
-  }
-}
-
-export class NoSynthesizerDesignatedError extends AuditError {
-  constructor(tool: string) {
-    super({
-      message: 'No Synthesizer has been designated for this session.',
-      code: 'NO_SYNTHESIZER_DESIGNATED',
-      tool,
-      detail: {
-        field: 'session_state',
-        submitted_value: 'No synthesizer',
-        expected: 'Designated Synthesizer agent',
-      },
-      action: 'The user must designate a Synthesizer first. Surface the session summary to the user so they can make the designation.',
-    });
-    this.name = 'NoSynthesizerDesignatedError';
-    Object.setPrototypeOf(this, NoSynthesizerDesignatedError.prototype);
   }
 }
 
@@ -422,57 +374,9 @@ export class QuestionLimitReachedError extends AuditError {
   }
 }
 
-export class InsufficientQuestionsError extends AuditError {
-  constructor(tool: string, currentCount: number) {
-    super({
-      message: `Phase 3 requires at least 5 questions, but only ${currentCount} accepted.`,
-      code: 'INSUFFICIENT_QUESTIONS',
-      phase: 2,
-      tool,
-      detail: {
-        field: 'questions_accepted',
-        submitted_value: currentCount,
-        expected: 'At least 5 questions',
-      },
-      action: `Submit ${5 - currentCount} more question(s) to reach the minimum of 5 before proceeding to Phase 3.`,
-    });
-    this.name = 'InsufficientQuestionsError';
-    Object.setPrototypeOf(this, InsufficientQuestionsError.prototype);
-  }
-}
-
 // ============================================================================
 // Sub-Question Errors
 // ============================================================================
-
-export class SubQuestionCountViolationError extends AuditError {
-  constructor(
-    tool: string,
-    expectedMin: number,
-    expectedMax: number,
-    actual: number,
-    depth: string
-  ) {
-    const action = actual < expectedMin
-      ? `Add ${expectedMin - actual} more sub-question(s) to meet the minimum of ${expectedMin}.`
-      : `Remove ${actual - expectedMax} sub-question(s) to meet the maximum of ${expectedMax}.`;
-
-    super({
-      message: `Sub-question count violation: Expected ${expectedMin}-${expectedMax} for ${depth} depth, got ${actual}.`,
-      code: 'SUB_QUESTION_COUNT_VIOLATION',
-      phase: 3,
-      tool,
-      detail: {
-        field: 'sub_questions',
-        submitted_value: actual,
-        expected: `${expectedMin}-${expectedMax} sub-questions`,
-      },
-      action,
-    });
-    this.name = 'SubQuestionCountViolationError';
-    Object.setPrototypeOf(this, SubQuestionCountViolationError.prototype);
-  }
-}
 
 export class UnknownMainQuestionError extends AuditError {
   constructor(tool: string, mainQuestionId: string, validIds: string[]) {
@@ -497,25 +401,6 @@ export class UnknownMainQuestionError extends AuditError {
 // Finding Errors
 // ============================================================================
 
-export class EscalationRequiredError extends AuditError {
-  constructor(tool: string, verdict: string, escalationQuestion: string) {
-    super({
-      message: `Verdict ${verdict} requires an escalation_finding.`,
-      code: 'ESCALATION_REQUIRED',
-      phase: 4,
-      tool,
-      detail: {
-        field: 'escalation_finding',
-        submitted_value: null,
-        expected: 'Escalation finding from the escalation question',
-      },
-      action: `Investigate: "${escalationQuestion}" and populate escalation_finding with what you found before resubmitting. Do not skip this.`,
-    });
-    this.name = 'EscalationRequiredError';
-    Object.setPrototypeOf(this, EscalationRequiredError.prototype);
-  }
-}
-
 export class FindingRejectedError extends AuditError {
   constructor(
     reason: RejectionReason,
@@ -533,44 +418,6 @@ export class FindingRejectedError extends AuditError {
     });
     this.name = 'FindingRejectedError';
     Object.setPrototypeOf(this, FindingRejectedError.prototype);
-  }
-}
-
-export class DuplicateFindingError extends AuditError {
-  constructor(tool: string, subQuestionId: string, agentId: string) {
-    super({
-      message: `Agent ${agentId} already submitted a finding for ${subQuestionId}.`,
-      code: 'DUPLICATE_FINDING',
-      phase: 4,
-      tool,
-      detail: {
-        field: 'sub_question_id',
-        submitted_value: subQuestionId,
-        expected: 'Unique finding per agent per sub-question',
-      },
-      action: 'Call react_to_finding if you want to extend or revise your position, not resubmit.',
-    });
-    this.name = 'DuplicateFindingError';
-    Object.setPrototypeOf(this, DuplicateFindingError.prototype);
-  }
-}
-
-export class UnknownSubQuestionError extends AuditError {
-  constructor(tool: string, subQuestionId: string, validIds: string[]) {
-    super({
-      message: `Sub-question ${subQuestionId} not found in session.`,
-      code: 'UNKNOWN_SUB_QUESTION',
-      phase: 4,
-      tool,
-      detail: {
-        field: 'sub_question_id',
-        submitted_value: subQuestionId,
-        expected: validIds.join(', ') || 'No valid sub-questions',
-      },
-      action: `Resubmit with a valid sub_question_id from: ${validIds.join(', ')}`,
-    });
-    this.name = 'UnknownSubQuestionError';
-    Object.setPrototypeOf(this, UnknownSubQuestionError.prototype);
   }
 }
 
@@ -603,101 +450,6 @@ export class CheckpointIncompleteError extends AuditError {
   }
 }
 
-export class AlreadyCheckpointedError extends AuditError {
-  constructor(tool: string, mainQuestionId: string, timestamp: Date) {
-    super({
-      message: `Agent already checkpointed main question ${mainQuestionId}.`,
-      code: 'ALREADY_CHECKPOINTED',
-      phase: 4,
-      tool,
-      detail: {
-        field: 'main_question_id',
-        submitted_value: mainQuestionId,
-        expected: 'Un-checkpointed main question',
-      },
-      action: `You checkpointed this question at ${timestamp.toISOString()}. Proceed to the next main question or call get_session_summary to see what remains.`,
-    });
-    this.name = 'AlreadyCheckpointedError';
-    Object.setPrototypeOf(this, AlreadyCheckpointedError.prototype);
-  }
-}
-
-// ============================================================================
-// Reaction Errors
-// ============================================================================
-
-export class SelfReactionError extends AuditError {
-  constructor(tool: string, findingId: string, agentId: string) {
-    super({
-      message: `Agent ${agentId} cannot react to their own finding ${findingId}.`,
-      code: 'SELF_REACTION',
-      tool,
-      detail: {
-        field: 'finding_id',
-        submitted_value: findingId,
-        expected: 'Finding from another agent',
-      },
-      action: 'You cannot react to your own findings. If you want to extend your finding with new evidence, call submit_finding with the additional evidence and reference the original finding ID.',
-    });
-    this.name = 'SelfReactionError';
-    Object.setPrototypeOf(this, SelfReactionError.prototype);
-  }
-}
-
-export class UnknownFindingError extends AuditError {
-  constructor(tool: string, findingId: string, validIds: string[]) {
-    super({
-      message: `Finding ${findingId} not found in session.`,
-      code: 'UNKNOWN_FINDING',
-      tool,
-      detail: {
-        field: 'finding_id',
-        submitted_value: findingId,
-        expected: validIds.join(', ') || 'No valid findings',
-      },
-      action: `Resubmit with a valid finding_id from: ${validIds.join(', ')}`,
-    });
-    this.name = 'UnknownFindingError';
-    Object.setPrototypeOf(this, UnknownFindingError.prototype);
-  }
-}
-
-export class ConfirmationRequiresEvidenceError extends AuditError {
-  constructor(tool: string, _agentId: string) {
-    super({
-      message: 'Confirm reactions must include independent evidence.',
-      code: 'CONFIRMATION_REQUIRES_INDEPENDENT_EVIDENCE',
-      tool,
-      detail: {
-        field: 'evidence',
-        submitted_value: 'Missing or same as original',
-        expected: 'Your own file path, line range, and reasoning',
-      },
-      action: 'Provide your own file path, your own line range, and your own reasoning — not a reference to the original finding\'s evidence. If you agree but have no independent evidence, do not confirm.',
-    });
-    this.name = 'ConfirmationRequiresEvidenceError';
-    Object.setPrototypeOf(this, ConfirmationRequiresEvidenceError.prototype);
-  }
-}
-
-export class ChallengeRequiresEvidenceError extends AuditError {
-  constructor(tool: string, _agentId: string) {
-    super({
-      message: 'Challenge reactions must cite contradictory evidence.',
-      code: 'CHALLENGE_REQUIRES_EVIDENCE',
-      tool,
-      detail: {
-        field: 'evidence',
-        submitted_value: 'Missing',
-        expected: 'Code that contradicts the original finding',
-      },
-      action: 'A challenge must cite the specific code that contradicts the original finding. A disagreement without evidence is not a valid challenge.',
-    });
-    this.name = 'ChallengeRequiresEvidenceError';
-    Object.setPrototypeOf(this, ChallengeRequiresEvidenceError.prototype);
-  }
-}
-
 // ============================================================================
 // Adjudication Errors
 // ============================================================================
@@ -717,94 +469,6 @@ export class FindingNotContestedError extends AuditError {
     });
     this.name = 'FindingNotContestedError';
     Object.setPrototypeOf(this, FindingNotContestedError.prototype);
-  }
-}
-
-export class IncompleteAdjudicationError extends AuditError {
-  constructor(
-    tool: string,
-    contestedFindings: { id: string; description: string; positions: string[] }[]
-  ) {
-    super({
-      message: `Cannot finalize with ${contestedFindings.length} unresolved contested findings.`,
-      code: 'INCOMPLETE_ADJUDICATION',
-      tool,
-      failures: contestedFindings.map(f => ({
-        code: 'UNRESOLVED_CONTESTED_FINDING',
-        field: 'finding_id',
-        submitted_value: f.id,
-        expected: 'Adjudicated finding',
-        action: `Call adjudicate_finding for ${f.id}: ${f.description.substring(0, 60)}... Positions: ${f.positions.join(' vs ')}`,
-      })),
-      action: `Call adjudicate_finding for every contested finding listed above before finalizing.`,
-    });
-    this.name = 'IncompleteAdjudicationError';
-    Object.setPrototypeOf(this, IncompleteAdjudicationError.prototype);
-  }
-}
-
-export class UnresolvedMissingDetailError extends AuditError {
-  constructor(tool: string, findingId: string) {
-    super({
-      message: `Unresolved ruling for ${findingId} requires unresolved_detail documentation.`,
-      code: 'UNRESOLVED_MISSING_DETAIL',
-      tool,
-      detail: {
-        field: 'unresolved_detail',
-        submitted_value: null,
-        expected: 'Documentation of what information is needed',
-      },
-      action: 'Unresolved rulings must document: what information is needed to resolve the contradiction, where that information likely exists, and what the severity would be under each agent\'s scenario.',
-    });
-    this.name = 'UnresolvedMissingDetailError';
-    Object.setPrototypeOf(this, UnresolvedMissingDetailError.prototype);
-  }
-}
-
-// ============================================================================
-// Finalization Errors
-// ============================================================================
-
-export class PreconditionsNotMetError extends AuditError {
-  constructor(
-    tool: string,
-    failures: { condition: string; detail: string; action: string }[]
-  ) {
-    super({
-      message: `${failures.length} precondition(s) not met before finalizing.`,
-      code: 'PRECONDITIONS_NOT_MET',
-      phase: 5,
-      tool,
-      failures: failures.map(f => ({
-        code: f.condition,
-        field: 'session',
-        submitted_value: 'Incomplete',
-        expected: f.condition,
-        action: f.action,
-      })),
-      action: 'Fix all failures listed above and resubmit. Do not resubmit until all are resolved.',
-    });
-    this.name = 'PreconditionsNotMetError';
-    Object.setPrototypeOf(this, PreconditionsNotMetError.prototype);
-  }
-}
-
-export class NoActionableFindingsError extends AuditError {
-  constructor(tool: string) {
-    super({
-      message: 'Audit produced no actionable findings (no FAIL or SUSPICIOUS verdicts).',
-      code: 'NO_ACTIONABLE_FINDINGS',
-      phase: 5,
-      tool,
-      detail: {
-        field: 'findings',
-        submitted_value: 0,
-        expected: 'At least one FAIL or SUSPICIOUS finding',
-      },
-      action: 'Verify this is accurate — if the investigation was thorough and the codebase is genuinely clean you may proceed. If the investigation was shallow, return to Phase 4.',
-    });
-    this.name = 'NoActionableFindingsError';
-    Object.setPrototypeOf(this, NoActionableFindingsError.prototype);
   }
 }
 
@@ -839,27 +503,4 @@ export class MissingFileCitationError extends AuditError {
 // General Validation Error
 // ============================================================================
 
-export class ValidationError extends AuditError {
-  constructor(
-    tool: string,
-    message: string,
-    field: string,
-    value: unknown,
-    expected: string,
-    action: string
-  ) {
-    super({
-      message,
-      code: 'VALIDATION_ERROR',
-      tool,
-      detail: {
-        field,
-        submitted_value: value,
-        expected,
-      },
-      action,
-    });
-    this.name = 'ValidationError';
-    Object.setPrototypeOf(this, ValidationError.prototype);
-  }
-}
+

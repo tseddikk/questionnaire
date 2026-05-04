@@ -33,7 +33,7 @@ export function listObservations(input: ListObservationsInput): ListObservations
 
   const observationSets: ObservationSetInfo[] = session.observation_sets.map(os => ({
     agent_id: os.agent_id,
-    submitted_at: os.submitted_at.toISOString(),
+    submitted_at: new Date(os.submitted_at).toISOString(),
     purpose: os.observations.purpose || 'Not provided',
     tech_stack_count: os.observations.tech_stack?.length || 0,
     entry_points_count: os.observations.entry_points?.length || 0,

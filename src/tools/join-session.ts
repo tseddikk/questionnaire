@@ -38,9 +38,17 @@ export function joinSession(input: JoinSessionInput): JoinSessionResponse {
       .filter(a => a.role === 'investigator')
       .map(a => a.agent_id),
     synthesizer: session.synthesizer,
-    instructions: 'You have joined a collaborative audit session. ' +
-      'Work through Phase 1-4 independently. ' +
-      'The heat map and merged observations are available in session state.',
+    instructions: `You have joined a collaborative audit session (Phase ${session.phase}). ` +
+      `Current investigators: ${session.agents.filter(a => a.role === 'investigator').map(a => a.agent_id).join(', ') || 'none yet'}. ` +
+      `Questions accepted: ${session.merged_questions.length}. ` +
+      `Findings submitted: ${session.findings.length}. ` +
+      (session.phase <= 2
+        ? 'Submit observations via submit_observations, then questions via submit_question.'
+        : session.phase === 3
+          ? 'Submit sub-questions via submit_sub_questions for each main question.'
+          : session.phase === 4
+            ? 'Investigate sub-questions via submit_finding. You can checkpoint when done.'
+            : 'Investigation is complete. Waiting for synthesizer to finalize.'),
   };
 }
 

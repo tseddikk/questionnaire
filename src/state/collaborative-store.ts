@@ -19,12 +19,13 @@ import type {
   AdjudicationRecord,
   AuditDomain,
   AuditDepth,
+  AuditPhase,
   MainQuestion,
   SubQuestion,
   HeatMap,
   CrossCuttingSignal,
 } from '../types/domain.js';
-import { SessionNotFoundError, SessionExpiredError } from './errors.js';
+import { SessionNotFoundError, SessionExpiredError, RepoMismatchError, SessionNotJoinableError, PhaseViolationError, UnknownMainQuestionError } from './errors.js';
 
 // ============================================================================
 // Configuration
@@ -157,9 +158,51 @@ export class CollaborativeSessionStore {
             const data = readFileSync(sessionPath, 'utf-8');
             const session = JSON.parse(data) as CollaborativeSession;
             
-            // Revive Date objects from JSON
-            session.created_at = new Date(session.created_at);
-            session.updated_at = new Date(session.updated_at);
+      // Revive Date objects from JSON
+      session.created_at = new Date(session.created_at);
+      session.updated_at = new Date(session.updated_at);
+
+      // Revive nested Date fields
+      if (session.agents) {
+        for (const agent of session.agents) {
+          if (agent.joined_at) agent.joined_at = new Date(agent.joined_at);
+        }
+      }
+      if (session.observation_sets) {
+        for (const os of session.observation_sets) {
+          if (os.submitted_at) os.submitted_at = new Date(os.submitted_at);
+        }
+      }
+      if (session.merged_questions) {
+        for (const q of session.merged_questions) {
+          if (q.created_at) q.created_at = new Date(q.created_at);
+        }
+      }
+      if (session.sub_question_pool) {
+        for (const sq of session.sub_question_pool) {
+          if (sq.created_at) sq.created_at = new Date(sq.created_at);
+        }
+      }
+      if (session.agent_checkpoints) {
+        for (const cp of session.agent_checkpoints) {
+          if (cp.completed_at) cp.completed_at = new Date(cp.completed_at);
+        }
+      }
+      if (session.question_reactions) {
+        for (const r of session.question_reactions) {
+          if (r.submitted_at) r.submitted_at = new Date(r.submitted_at);
+        }
+      }
+      if (session.finding_reactions) {
+        for (const r of session.finding_reactions) {
+          if (r.submitted_at) r.submitted_at = new Date(r.submitted_at);
+        }
+      }
+      if (session.adjudications) {
+        for (const a of session.adjudications) {
+          if (a.adjudicated_at) a.adjudicated_at = new Date(a.adjudicated_at);
+        }
+      }
             
             // Fix: Map serialization issues. JSON.parse makes it a regular object.
             // If it's an object but should be a Map, we need to convert it.
@@ -200,7 +243,9 @@ export class CollaborativeSessionStore {
     try {
       writeFileSync(sessionPath, JSON.stringify(session, null, 2), 'utf-8');
     } catch (e) {
-      console.error(`Failed to save collaborative session ${session.session_id}:`, e);
+      const error = new Error(`Failed to save collaborative session ${session.session_id}: ${e instanceof Error ? e.message : String(e)}`);
+      error.name = 'SessionSaveError';
+      throw error;
     }
   }
 
@@ -313,6 +358,8 @@ export class CollaborativeSessionStore {
       unresolved_findings: [],
       // Report
       report: null,
+      // Archive
+      archive_reason: null,
     };
 
     // Track repo path for this session
@@ -385,40 +432,8 @@ export class CollaborativeSessionStore {
   }
 
   /**
-   * Check if a session exists
-   */
-  hasSession(sessionId: string): boolean {
-    try {
-      this.getSession(sessionId);
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
-  /**
-   * Get active session ID
-   */
-  getActiveSessionId(): string | null {
-    // Active session tracking is in-memory only for current repo
-
-    // Check if active session is expired
-    if (this.activeSessionId) {
-      try {
-        const active = this.getSession(this.activeSessionId);
-        if (this.isSessionExpired(active)) {
-          this.activeSessionId = null;
-        }
-      } catch {
-        this.activeSessionId = null;
-      }
-    }
-    return this.activeSessionId;
-  }
-
-  /**
-   * Discover active sessions for a repo
-   */
+    * Discover active sessions for a repo
+    */
   discoverSessions(repoPath: string): CollaborativeSession[] {
     this.loadSessionsFromRepo(repoPath);
     this.cleanupExpiredSessionsForRepo(repoPath);
@@ -445,14 +460,14 @@ export class CollaborativeSessionStore {
 
     // Verify repo matches
     if (session.repo_path !== repoPath) {
-      throw new Error(`REPO_MISMATCH: Session ${sessionId} is for ${session.repo_path}, not ${repoPath}`);
+      throw new RepoMismatchError('join_session', session.repo_path, repoPath);
     }
 
     // Check session state allows joining
     if (session.session_state === 'finalized' || 
         session.session_state === 'archived' ||
         session.session_state === 'archived_incomplete') {
-      throw new Error(`Cannot join session in state: ${session.session_state}`);
+      throw new SessionNotJoinableError('join_session', sessionId, session.session_state);
     }
 
     // Check if agent is already in session
@@ -475,27 +490,23 @@ export class CollaborativeSessionStore {
    */
   designateSynthesizer(sessionId: string, agentId: AgentId): void {
     const session = this.getSession(sessionId);
+    const oldSynthesizer = session.synthesizer;
     session.synthesizer = agentId;
-    
+
+    // Demote previous synthesizer to investigator
+    if (oldSynthesizer) {
+      const prevAgent = session.agents.find(a => a.agent_id === oldSynthesizer);
+      if (prevAgent) {
+        prevAgent.role = 'investigator';
+      }
+    }
+
     // Update role of the designated agent
     const agent = session.agents.find(a => a.agent_id === agentId);
     if (agent) {
       agent.role = 'synthesizer';
     }
-    
-    session.updated_at = new Date();
-    this.saveSession(session);
-  }
 
-  /**
-   * Merge findings from an agent into the collaborative session
-   */
-  mergeFinding(
-    sessionId: string,
-    agentFinding: AgentFinding
-  ): void {
-    const session = this.getSession(sessionId);
-    session.findings.push(agentFinding);
     session.updated_at = new Date();
     this.saveSession(session);
   }
@@ -522,6 +533,12 @@ export class CollaborativeSessionStore {
   ): void {
     const session = this.getSession(sessionId);
     session.finding_reactions.push(reaction);
+
+    if (reaction.reaction_type === 'challenge' &&
+        !session.contested_findings.includes(reaction.finding_id)) {
+      session.contested_findings.push(reaction.finding_id);
+    }
+
     session.updated_at = new Date();
     this.saveSession(session);
   }
@@ -545,6 +562,9 @@ export class CollaborativeSessionStore {
   ): void {
     const session = this.getSession(sessionId);
     session.adjudications.push(adjudication);
+    session.contested_findings = session.contested_findings.filter(
+      id => id !== adjudication.finding_id
+    );
     session.updated_at = new Date();
     this.saveSession(session);
   }
@@ -705,11 +725,12 @@ export class CollaborativeSessionStore {
   /**
    * Archive a session
    */
-  archiveSession(sessionId: string, _reason: string): CollaborativeSession {
+  archiveSession(sessionId: string, reason: string): CollaborativeSession {
     const session = this.getSession(sessionId);
     session.session_state = 'archived_incomplete';
+    session.archive_reason = reason;
     session.updated_at = new Date();
-    
+
     // Clear active session if this was it
     if (this.activeSessionId === sessionId) {
       this.activeSessionId = null;
@@ -726,7 +747,7 @@ export class CollaborativeSessionStore {
     const session = this.getSession(sessionId);
 
     if (session.phase >= newPhase) {
-      throw new Error(`Cannot advance to phase ${newPhase} from phase ${session.phase}`);
+      throw new PhaseViolationError('advance_phase', session.phase as AuditPhase, newPhase as AuditPhase);
     }
 
     session.phase = newPhase as any;
@@ -810,14 +831,6 @@ export class CollaborativeSessionStore {
   }
 
   /**
-   * Get remaining main questions (without sub-questions) - for Phase 3
-   */
-  getRemainingMainQuestions(sessionId: string): MainQuestion[] {
-    const session = this.getSession(sessionId, true);
-    return session.merged_questions.filter(q => q.sub_question_ids.length === 0);
-  }
-
-  /**
    * Get uncheckpointed main questions - for Phase 4
    */
   getUncheckpointedMainQuestions(sessionId: string): MainQuestion[] {
@@ -840,7 +853,7 @@ export class CollaborativeSessionStore {
 
     const mainQuestion = session.merged_questions.find(q => q.id === mainQuestionId);
     if (!mainQuestion) {
-      throw new Error(`Main question ${mainQuestionId} not found`);
+      throw new UnknownMainQuestionError('addSubQuestions', mainQuestionId, session.merged_questions.map(q => q.id));
     }
 
     const now = new Date();
@@ -873,10 +886,12 @@ export class CollaborativeSessionStore {
   addFinding(sessionId: string, agentId: string, finding: any): AgentFinding {
     const session = this.getSession(sessionId, true);
 
+    const findingId = uuidv4();
     const agentFinding: AgentFinding = {
       ...finding,
+      id: findingId,
       agent_id: agentId,
-      finding_id: uuidv4(),
+      finding_id: findingId,
     };
 
     session.findings.push(agentFinding);
@@ -910,13 +925,6 @@ export class CollaborativeSessionStore {
   }
 
   /**
-   * Get all findings for a session
-   */
-  getAllFindings(sessionId: string): AgentFinding[] {
-    return this.getSession(sessionId).findings;
-  }
-
-  /**
    * Add a checkpoint
    */
   addCheckpoint(
@@ -939,14 +947,6 @@ export class CollaborativeSessionStore {
   }
 
   /**
-   * Check if main question is checkpointed
-   */
-  isCheckpointed(sessionId: string, mainQuestionId: string): boolean {
-    const session = this.getSession(sessionId);
-    return session.agent_checkpoints.some(cp => cp.main_question_id === mainQuestionId);
-  }
-
-  /**
    * Set final report
    */
   setReport(sessionId: string, report: any): void {
@@ -957,26 +957,6 @@ export class CollaborativeSessionStore {
     this.saveSession(session);
   }
 
-  /**
-   * Get session statistics
-   */
-  getSessionStats(sessionId: string): {
-    mainQuestions: number;
-    subQuestions: number;
-    findings: number;
-    checkpoints: number;
-    agents: number;
-  } {
-    const session = this.getSession(sessionId);
-
-    return {
-      mainQuestions: session.merged_questions.length,
-      subQuestions: session.sub_question_pool.length,
-      findings: session.findings.length,
-      checkpoints: session.agent_checkpoints.length,
-      agents: session.agents.length,
-    };
-  }
 }
 
 // ============================================================================
