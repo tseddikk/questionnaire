@@ -50,7 +50,7 @@ node dist/index.js
 
 **Integration with Claude Code:**
 
-Add to your Claude Code configuration (`.opencode/opencode.jsonc`):
+Add to your opencode configuration (`.opencode/opencode.jsonc`):
 
 ```json
 {
