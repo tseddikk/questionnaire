@@ -48,7 +48,7 @@ npm start
 node dist/index.js
 ```
 
-**Integration with Claude Code:**
+**Integration with Opencode:**
 
 Add to your opencode configuration (`.opencode/opencode.jsonc`):
 
